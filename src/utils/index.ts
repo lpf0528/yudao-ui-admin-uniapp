@@ -123,9 +123,9 @@ export function getEnvBaseUrl() {
 
   // # 有些同学可能需要在微信小程序里面根据 develop、trial、release 分别设置上传地址，参考代码如下。
   // TODO @芋艿：这个后续也要调整。
-  const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'http://localhost:48080/admin-api'
-  const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'http://localhost:48080/admin-api'
-  const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'http://localhost:48080/admin-api'
+  const VITE_SERVER_BASEURL__WEIXIN_DEVELOP = 'http://13.192.214.144:48080/admin-api'
+  const VITE_SERVER_BASEURL__WEIXIN_TRIAL = 'http://13.192.214.144:48080/admin-api'
+  const VITE_SERVER_BASEURL__WEIXIN_RELEASE = 'http://13.192.214.144:48080/admin-api'
 
   // 微信小程序端环境区分
   if (isMpWeixin) {
@@ -185,15 +185,15 @@ export function redirectAfterLogin(redirectUrl?: string) {
   if (!path.startsWith('/')) {
     path = `/${path}`
   }
-  const { path: _path,query } = parseUrlToObj(path)
+  const { path: _path, query } = parseUrlToObj(path)
   if (isPageTabbar(_path)) {
     uni.switchTab({ url: path })
   } else {
     // 如果 query 有值则通过reLaunch方式跳转过来所以不能用back
-    if(Object.keys(query).length > 0){
-        uni.reLaunch({ url: path })
-    }else{
-        uni.navigateBack()
+    if (Object.keys(query).length > 0) {
+      uni.reLaunch({ url: path })
+    } else {
+      uni.navigateBack()
     }
   }
 }

@@ -27,6 +27,44 @@ export interface MenuGroup {
 /** 菜单分组原始数据 */
 const menuGroupsData: MenuGroup[] = [
   {
+    key: 'curtain',
+    name: '窗帘管理',
+    menus: [
+      {
+        key: 'order',
+        name: '订单管理',
+        icon: 'user',
+        url: '/pages-curtain/order/index',
+        iconColor: '#1890ff',
+        permission: 'system:user:list',
+      },
+      {
+        key: 'crop',
+        name: '裁剪中心',
+        icon: 'user',
+        url: '/pages-system/user/index',
+        iconColor: '#1890ff',
+        permission: 'system:user:list',
+      },
+      {
+        key: 'crop',
+        name: '库存管理',
+        icon: 'user',
+        url: '/pages-system/user/index',
+        iconColor: '#1890ff',
+        permission: 'system:user:list',
+      },
+      {
+        key: 'crop',
+        name: '入库管理',
+        icon: 'user',
+        url: '/pages-system/user/index',
+        iconColor: '#1890ff',
+        permission: 'system:user:list',
+      },
+    ],
+  },
+  {
     key: 'system',
     name: '系统管理',
     menus: [
