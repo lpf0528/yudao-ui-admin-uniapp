@@ -11,7 +11,7 @@
     <!-- <HomeBanner /> -->
     <!-- 菜单区域 -->
     <MenuSection />
-    <!-- 新增按钮（可拖动） -->
+    <!-- 扫码按钮（可拖动） -->
     <view
       class="fixed z-10 h-100rpx w-100rpx flex items-center justify-center rounded-full bg-[#1890ff] shadow-lg"
       :style="btnStyle"
@@ -70,13 +70,33 @@ function onTouchMove(e: TouchEvent) {
 
 function onTouchEnd() {
   if (!isDragging.value) {
-    handleCreate()
+    handleScanCode()
   }
   isDragging.value = false
 }
 
-function handleCreate() {
-  // TODO: 新增操作
+function handleScanCode() {
+  // #ifndef H5
+  uni.scanCode({
+    onlyFromCamera: false,
+    success(res) {
+      uni.showToast({
+        title: res.result,
+        icon: 'none',
+        duration: 3000,
+      })
+    },
+    fail(err) {
+      if (err.errMsg?.includes('cancel'))
+        return
+      uni.showToast({ title: '扫码失败，请重试', icon: 'none' })
+    },
+  })
+  // #endif
+
+  // #ifdef H5
+  uni.showToast({ title: '请在APP或小程序中使用扫码功能', icon: 'none' })
+  // #endif
 }
 
 definePage({
