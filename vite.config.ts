@@ -74,9 +74,10 @@ export default defineConfig(({ command, mode }) => {
         // 是个数组，可以配置多个，但是不能为pages里面的目录！！
         subPackages: [
           'src/pages-core', // 这个是相对必要的路由，尽量留着（登录页、注册页、404页等）
-          'src/pages-system', // “系统管理”模块
-          'src/pages-infra', // “基础设施”模块
-          'src/pages-bpm', // “工作流程”模块
+          'src/pages-system', // "系统管理"模块
+          'src/pages-infra', // "基础设施"模块
+          'src/pages-bpm', // "工作流程"模块
+          'src/pages-curtain', // "门帘"模块
         ],
         dts: 'src/types/uni-pages.d.ts',
       }),

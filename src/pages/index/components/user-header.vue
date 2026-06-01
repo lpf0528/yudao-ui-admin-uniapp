@@ -1,19 +1,15 @@
 <template>
   <view class="mx-20rpx mt-20rpx overflow-hidden rounded-16rpx bg-white">
     <view class="flex items-center p-24rpx">
-      <view class="avatar-wrapper mr-20rpx h-100rpx w-100rpx overflow-hidden rounded-full">
-        <image
-          :src="userInfo.avatar"
-          mode="aspectFill"
-          class="h-full w-full"
-        />
+      <view class="avatar-wrapper mr-20rpx h-100rpx w-100rpx flex items-center justify-center rounded-full bg-[#e8f4f0]">
+        <view class="i-carbon-user-avatar-filled text-64rpx text-[#018d71]" />
       </view>
       <view class="flex-1">
         <view class="text-32rpx text-#333 font-500">
-          {{ greeting }}，{{ userInfo.nickname || userInfo.username }}
+          操作员(主)：张三
         </view>
         <view class="mt-8rpx text-26rpx text-#999">
-          {{ description }}
+          操作员(副)：李四
         </view>
       </view>
     </view>
