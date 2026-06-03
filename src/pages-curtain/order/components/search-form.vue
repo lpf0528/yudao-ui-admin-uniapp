@@ -12,18 +12,18 @@
           订单号
         </view>
         <wd-input
-          v-model="formData.order_no"
+          v-model="formData.orderNo"
           placeholder="请输入订单号"
           clearable
         />
       </view>
       <view class="yd-search-form-item">
         <view class="yd-search-form-label">
-          客户名称
+          订单类型
         </view>
         <wd-input
-          v-model="formData.customer_name"
-          placeholder="请输入客户名称"
+          v-model="formData.types"
+          placeholder="请输入订单类型"
           clearable
         />
       </view>
@@ -50,31 +50,27 @@ const emit = defineEmits<{
 
 const visible = ref(false)
 const formData = reactive({
-  order_no: undefined as string | undefined,
-  customer_name: undefined as string | undefined,
+  orderNo: undefined as string | undefined,
+  types: undefined as string | undefined,
 })
 
 const placeholder = computed(() => {
   const conditions: string[] = []
-  if (formData.order_no) {
-    conditions.push(`订单号:${formData.order_no}`)
-  }
-  if (formData.customer_name) {
-    conditions.push(`客户:${formData.customer_name}`)
-  }
+  if (formData.orderNo)
+    conditions.push(`订单号:${formData.orderNo}`)
+  if (formData.types)
+    conditions.push(`类型:${formData.types}`)
   return conditions.length > 0 ? conditions.join(' | ') : '搜索订单'
 })
 
-/** 搜索 */
 function handleSearch() {
   visible.value = false
   emit('search', { ...formData })
 }
 
-/** 重置 */
 function handleReset() {
-  formData.order_no = undefined
-  formData.customer_name = undefined
+  formData.orderNo = undefined
+  formData.types = undefined
   visible.value = false
   emit('reset')
 }

@@ -2,14 +2,14 @@
   <view class="yd-page-container">
     <!-- 顶部导航栏 -->
     <wd-navbar
-      title="订单列表"
+      title="销售订单列表"
       left-arrow placeholder safe-area-inset-top fixed
       @click-left="handleBack"
     />
 
     <!-- 顶部筛选栏 -->
     <view class="filter-container">
-      <!-- 订单号和客户名称搜索 -->
+      <!-- 订单号 + 客户 -->
       <view class="filter-section">
         <view class="search-inputs">
           <input
@@ -17,22 +17,43 @@
             type="text"
             class="search-input"
             placeholder="订单号"
-            @change="handleFilterChange"
           >
-          <input
-            v-model="filterParams.customerName"
-            type="text"
-            class="search-input"
-            placeholder="客户名称"
-            @change="handleFilterChange"
+          <picker
+            mode="selector"
+            :range="customerOptions"
+            range-key="shortName"
+            :value="selectedCustomerIndex"
+            class="customer-picker"
+            @change="onCustomerChange"
           >
+            <view class="search-input picker-text" :class="{ 'has-value': filterParams.customerId }">
+              {{ selectedCustomerName || '选择客户' }}
+            </view>
+          </picker>
         </view>
       </view>
 
-      <!-- 时间范围筛选 -->
+      <!-- 订单类型 -->
       <view class="filter-section">
         <view class="filter-label">
-          订单日期
+          订单类型
+        </view>
+        <view class="status-chips">
+          <view
+            v-for="item in typeOptions"
+            :key="item.value"
+            class="status-chip" :class="[{ active: filterParams.types === item.value }]"
+            @click="filterParams.types = item.value"
+          >
+            {{ item.label }}
+          </view>
+        </view>
+      </view>
+
+      <!-- 下单时间范围 -->
+      <view class="filter-section">
+        <view class="filter-label">
+          下单时间
         </view>
         <view class="filter-inputs">
           <picker
@@ -61,23 +82,6 @@
         </view>
       </view>
 
-      <!-- 订单状态筛选 -->
-      <view class="filter-section">
-        <view class="filter-label">
-          订单状态
-        </view>
-        <view class="status-chips">
-          <view
-            v-for="(text, status) in statusOptions"
-            :key="status"
-            class="status-chip" :class="[{ active: filterParams.status === status }]"
-            @click="filterParams.status = status; handleFilterChange()"
-          >
-            {{ text }}
-          </view>
-        </view>
-      </view>
-
       <!-- 操作按钮 -->
       <view class="filter-actions">
         <view class="reset-btn" @click="handleReset">
@@ -97,41 +101,52 @@
         class="mb-16rpx overflow-hidden rounded-8rpx bg-white shadow-sm"
         @click="handleDetail(item)"
       >
-        <view class="p-16rpx">
-          <!-- 订单卡片头部：订单号和状态 -->
+        <view class="p-24rpx">
+          <!-- 头部：订单类型 + 序号 + 订单号 + 状态 -->
           <view class="mb-16rpx flex items-center justify-between">
-            <view class="text-36rpx text-[#333] font-semibold">
-              {{ index + 1 }}、NO：{{ item.order_no }}
+            <view class="flex items-center gap-8rpx">
+              <view v-if="item.types" class="order-type" :class="[`status-${getTypeColorType(item.types)}`]">
+                {{ getTypeLabel(item.types) }}
+              </view>
+              <view class="text-30rpx text-[#333] font-semibold">
+                {{ index + 1 }}、{{ item.orderNo }}
+              </view>
             </view>
-            <view class="text-32rpx">
-              共<text class="text-red">{{ item.total }}</text>套
-            </view>
-            <view class="order-status" :class="[`status-${item.status}`]">
-              {{ getStatusText(item.status) }}
+            <view class="order-status" :class="[`status-${getStatusColorType(item.status)}`]">
+              {{ getStatusLabel(item.status) }}
             </view>
           </view>
 
-          <!-- 订单卡片主要信息 -->
-          <view class="grid grid-cols-2 gap-12rpx">
+          <!-- 主体信息 -->
+          <view class="grid grid-cols-2 gap-y-12rpx">
             <view class="order-item">
-              <view class="value">
-                客户：{{ item.customer_name }}
+              <view class="label">
+                客户名称:
               </view>
-            </view>
-
-            <view class="order-item">
               <view class="value">
-                类型：{{ item.types }}
+                {{ item.customerName || '-' }}
               </view>
             </view>
             <view class="order-item">
+              <view class="label" />
               <view class="value">
-                下单：{{ item.order_date }}
+                共2套
               </view>
             </view>
             <view class="order-item">
+              <view class="label">
+                下单时间:
+              </view>
               <view class="value">
-                交货：{{ item.delivery_date }}
+                {{ item.orderDate || '-' }}
+              </view>
+            </view>
+            <view class="order-item">
+              <view class="label">
+                交付时间:
+              </view>
+              <view class="value">
+                {{ item.deliveryDate || '-' }}
               </view>
             </view>
           </view>
@@ -160,11 +175,14 @@
 </template>
 
 <script lang="ts" setup>
-import type { Order } from '@/api/curtain/order'
+import type { CustomerSimple } from '@/api/curtain/customer'
+import type { SalesOrder } from '@/api/curtain/order'
 import type { LoadMoreState } from '@/http/types'
 import { onReachBottom } from '@dcloudio/uni-app'
-import { onMounted, ref } from 'vue'
-import { getOrderPage } from '@/api/curtain/order'
+import { computed, onMounted, ref } from 'vue'
+import { getCustomerSimpleList } from '@/api/curtain/customer'
+import { getSalesOrderPage } from '@/api/curtain/order'
+import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
 definePage({
@@ -175,7 +193,7 @@ definePage({
 })
 
 const total = ref(0)
-const list = ref<Order[]>([])
+const list = ref<SalesOrder[]>([])
 const loadMoreState = ref<LoadMoreState>('loading')
 const queryParams = ref({
   pageNo: 1,
@@ -183,128 +201,121 @@ const queryParams = ref({
 })
 const filterParams = ref({
   orderNo: '',
-  customerName: '',
+  customerId: undefined as number | undefined,
+  types: '',
   startDate: '',
   endDate: '',
-  status: '',
 })
 
-const statusOptions = {
-  '': '全部',
-  '0': '待审核',
-  '1': '已审核',
-  '2': '已取消',
+const customers = ref<CustomerSimple[]>([])
+const customerOptions = computed(() => [{ id: undefined, shortName: '全部客户' }, ...customers.value])
+const selectedCustomerIndex = computed(() => {
+  if (!filterParams.value.customerId)
+    return 0
+  const idx = customerOptions.value.findIndex(c => c.id === filterParams.value.customerId)
+  return idx > 0 ? idx : 0
+})
+const selectedCustomerName = computed(() => {
+  if (!filterParams.value.customerId)
+    return ''
+  return customers.value.find(c => c.id === filterParams.value.customerId)?.shortName ?? ''
+})
+
+function onCustomerChange(e: any) {
+  const idx = e.detail.value as number
+  filterParams.value.customerId = customerOptions.value[idx]?.id
 }
 
-/** 获取状态文本 */
-function getStatusText(status: number) {
-  const statusMap: Record<number, string> = {
-    0: '待审核',
-    1: '已审核',
-    2: '已取消',
-  }
-  return statusMap[status] || '未知'
+const dictStore = useDictStore()
+const typeOptions = computed(() => [
+  { label: '全部', value: '' },
+  ...dictStore.getDictOptions('zc_order_type'),
+])
+
+function getTypeLabel(value: string) {
+  return dictStore.getDictData('zc_order_type', value)?.label ?? value ?? '-'
 }
 
-/** 返回上一页 */
+function getTypeColorType(value: string) {
+  return dictStore.getDictData('zc_order_type', value)?.colorType ?? 'default'
+}
+
+function getStatusLabel(status: string) {
+  return dictStore.getDictData('zc_order_status', status)?.label ?? status ?? '-'
+}
+
+function getStatusColorType(status: string) {
+  return dictStore.getDictData('zc_order_status', status)?.colorType ?? 'default'
+}
+
 function handleBack() {
   navigateBackPlus()
 }
 
-/** 查询订单列表 */
 async function getList() {
   loadMoreState.value = 'loading'
   try {
-    const data = await getOrderPage(queryParams.value)
-    list.value = [...list.value, ...data.list]
+    const params: Record<string, any> = {
+      pageNo: queryParams.value.pageNo,
+      pageSize: queryParams.value.pageSize,
+    }
+    if (filterParams.value.orderNo)
+      params.orderNo = filterParams.value.orderNo
+    if (filterParams.value.customerId)
+      params.customerId = filterParams.value.customerId
+    if (filterParams.value.types)
+      params.types = filterParams.value.types
+    if (filterParams.value.startDate || filterParams.value.endDate) {
+      params.orderDate = [
+        filterParams.value.startDate ? `${filterParams.value.startDate} 00:00:00` : '',
+        filterParams.value.endDate ? `${filterParams.value.endDate} 23:59:59` : '',
+      ]
+    }
+
+    const data = await getSalesOrderPage(params as any)
+    list.value = queryParams.value.pageNo === 1
+      ? data.list
+      : [...list.value, ...data.list]
     total.value = data.total
     loadMoreState.value = list.value.length >= total.value ? 'finished' : 'loading'
   } catch {
-    queryParams.value.pageNo = queryParams.value.pageNo > 1 ? queryParams.value.pageNo - 1 : 1
+    if (queryParams.value.pageNo > 1)
+      queryParams.value.pageNo--
     loadMoreState.value = 'error'
   }
 }
 
-/** 筛选条件变化 */
-function handleFilterChange() {
-  // 仅用于触发UI更新
-}
-
-/** 查询按钮操作 */
 function handleQuery() {
-  const filter: Record<string, any> = {
-    pageNo: 1,
-    pageSize: queryParams.value.pageSize,
-  }
-
-  if (filterParams.value.orderNo) {
-    filter.orderNo = filterParams.value.orderNo
-  }
-  if (filterParams.value.customerName) {
-    filter.customerName = filterParams.value.customerName
-  }
-  if (filterParams.value.startDate) {
-    filter.startDate = filterParams.value.startDate
-  }
-  if (filterParams.value.endDate) {
-    filter.endDate = filterParams.value.endDate
-  }
-  if (filterParams.value.status !== '') {
-    filter.status = Number(filterParams.value.status)
-  }
-
-  queryParams.value = filter
-  list.value = [] // 清空列表
+  queryParams.value.pageNo = 1
+  list.value = []
   getList()
 }
 
-/** 重置按钮操作 */
 function handleReset() {
-  filterParams.value = {
-    orderNo: '',
-    customerName: '',
-    startDate: '',
-    endDate: '',
-    status: '',
-  }
-  queryParams.value = {
-    pageNo: 1,
-    pageSize: 10,
-  }
-  list.value = [] // 清空列表
+  filterParams.value = { orderNo: '', customerId: undefined, types: '', startDate: '', endDate: '' }
+  queryParams.value.pageNo = 1
+  list.value = []
   getList()
 }
 
-/** 加载更多 */
 function loadMore() {
-  if (loadMoreState.value === 'finished') {
+  if (loadMoreState.value === 'finished')
     return
-  }
   queryParams.value.pageNo++
   getList()
 }
 
-/** 新增订单 */
 function handleAdd() {
-  uni.navigateTo({
-    url: '/pages-curtain/order/form/index',
-  })
+  uni.navigateTo({ url: '/pages-curtain/order/form/index' })
 }
 
-/** 查看详情 */
-function handleDetail(item: Order) {
-  uni.navigateTo({
-    url: `/pages-curtain/order/detail/index?id=${item.id}`,
-  })
+function handleDetail(item: SalesOrder) {
+  uni.navigateTo({ url: `/pages-curtain/order/detail/index?id=${item.id}` })
 }
 
-/** 触底加载更多 */
-onReachBottom(() => {
-  loadMore()
-})
-
-/** 初始化 */
+onReachBottom(() => { loadMore() })
 onMounted(() => {
+  getCustomerSimpleList().then((list) => { customers.value = list })
   getList()
 })
 </script>
@@ -313,7 +324,6 @@ onMounted(() => {
 .filter-container {
   background-color: #fff;
   padding: 16rpx 24rpx;
-  // margin-top: 88rpx;
   border-bottom: 1rpx solid #f0f0f0;
 }
 
@@ -330,25 +340,38 @@ onMounted(() => {
   gap: 12rpx;
 }
 
+.customer-picker {
+  flex: 1;
+}
+
+.picker-text {
+  color: #bbb;
+  text-align: left;
+
+  &.has-value {
+    color: #1890ff;
+  }
+}
+
 .search-input {
   flex: 1;
-  padding: 8rpx 12rpx;
+  padding: 10rpx 16rpx;
   border: 1rpx solid #ddd;
-  border-radius: 12rpx;
+  border-radius: 8rpx;
   font-size: 28rpx;
   color: #333;
-  background-color: #fff;
+  background-color: #f9f9f9;
 
   &::placeholder {
-    color: #999;
+    color: #bbb;
   }
 }
 
 .filter-label {
-  font-size: 30rpx;
-  color: #333;
+  font-size: 28rpx;
+  color: #666;
   font-weight: 500;
-  margin-bottom: 8rpx;
+  margin-bottom: 10rpx;
 }
 
 .filter-inputs {
@@ -364,17 +387,11 @@ onMounted(() => {
 .date-input {
   padding: 10rpx 12rpx;
   border: 1rpx solid #ddd;
-  border-radius: 12rpx;
-  font-size: 28rpx;
+  border-radius: 8rpx;
+  font-size: 26rpx;
   color: #333;
-  background-color: #fff;
+  background-color: #f9f9f9;
   text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-
-  &:active {
-    background-color: #f5f5f5;
-  }
 }
 
 .date-separator {
@@ -389,17 +406,12 @@ onMounted(() => {
 }
 
 .status-chip {
-  padding: 8rpx 16rpx;
+  padding: 6rpx 20rpx;
   border: 1rpx solid #ddd;
   border-radius: 24rpx;
-  font-size: 28rpx;
+  font-size: 26rpx;
   color: #666;
   background-color: #fff;
-  transition: all 0.3s ease;
-
-  &:active {
-    opacity: 0.7;
-  }
 
   &.active {
     border-color: #1890ff;
@@ -417,69 +429,88 @@ onMounted(() => {
 .search-btn {
   flex: 1;
   padding: 10rpx;
-  border-radius: 12rpx;
-  font-size: 30rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
   font-weight: 500;
   text-align: center;
-  transition: all 0.3s ease;
 }
 
 .reset-btn {
   border: 1rpx solid #ddd;
   color: #333;
   background-color: #fff;
-
-  &:active {
-    background-color: #f5f5f5;
-  }
 }
 
 .search-btn {
   border: none;
   color: #fff;
   background-color: #1890ff;
+}
 
-  &:active {
-    background-color: #0050b3;
-  }
+.status-warning {
+  background-color: #fff7e6;
+  color: #faad14;
+}
+
+.status-primary {
+  background-color: #e6f7ff;
+  color: #1890ff;
+}
+
+.status-info {
+  background-color: #e6fffb;
+  color: #13c2c2;
+}
+
+.status-success {
+  background-color: #f6ffed;
+  color: #52c41a;
+}
+
+.status-danger {
+  background-color: #fff1f0;
+  color: #ff4d4f;
+}
+
+.status-default {
+  background-color: #f5f5f5;
+  color: #999;
 }
 
 .order-status {
-  padding: 4rpx 12rpx;
+  padding: 4rpx 14rpx;
   border-radius: 4rpx;
-  font-size: 28rpx;
+  font-size: 24rpx;
   font-weight: 500;
+}
 
-  &.status-0 {
-    background-color: #fff7e6;
-    color: #faad14;
-  }
-
-  &.status-1 {
-    background-color: #f6ffed;
-    color: #52c41a;
-  }
-
-  &.status-2 {
-    background-color: #fff1f0;
-    color: #ff4d4f;
-  }
+.order-type {
+  display: inline-block;
+  padding: 2rpx 12rpx;
+  border-radius: 4rpx;
+  font-size: 26rpx;
+  font-weight: 500;
 }
 
 .order-item {
   display: flex;
-  flex-direction: column;
-  gap: 4rpx;
+  flex-direction: row;
+  align-items: center;
+  gap: 8rpx;
 }
 
 .label {
-  font-size: 28rpx;
+  font-size: 24rpx;
   color: #999;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .value {
-  font-size: 30rpx;
+  font-size: 26rpx;
   color: #333;
-  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

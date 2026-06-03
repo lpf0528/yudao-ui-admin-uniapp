@@ -22,6 +22,7 @@ export default uniHelper({
   ],
   // https://eslint-config.antfu.me/rules
   rules: {
+    'style/max-statements-per-line': 'off', // 关闭每行语句数限制
     'no-useless-return': 'off',
     'no-console': 'off',
     'no-unused-vars': 'off',
