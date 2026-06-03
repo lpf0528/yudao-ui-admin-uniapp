@@ -39,11 +39,11 @@ const menuGroupsData: MenuGroup[] = [
         permission: 'system:user:list',
       },
       {
-        key: 'crop',
-        name: '裁剪中心',
-        icon: 'user',
-        url: '/pages-system/user/index',
-        iconColor: '#1890ff',
+        key: 'productInbound',
+        name: '产品入库',
+        icon: 'add-circle',
+        url: '/pages-curtain/product-inbound/index',
+        iconColor: '#52c41a',
         permission: 'system:user:list',
       },
       {
