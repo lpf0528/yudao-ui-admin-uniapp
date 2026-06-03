@@ -44,8 +44,79 @@ export function getSalesOrderPage(params: SalesOrderPageParam) {
   return httpGet<PageResult<SalesOrder>>('/zc/sales-order/page', params as Record<string, any>)
 }
 
-/** 获取销售订单详情 */
-// TODO: export function getSalesOrder(id: number) { return httpGet<SalesOrder>(`/admin-api/zc/sales-order/get?id=${id}`) }
+/** 用料明细 */
+export interface SalesOrderMaterialDetail {
+  id: number
+  orderId: number
+  orderStructureId: number
+  elementId: number
+  productId: number
+  batchId: number
+  price: number
+  quantity: number
+  unitValue: string
+  discountRate: number
+  amount: number
+  note: string
+  createTime: string
+  elementName: string
+  productName: string
+  batchNo: string
+}
+
+/** 结构行详情 */
+export interface SalesOrderStructureDetail {
+  id: number
+  orderId: number
+  orderCurtainId: number
+  structureId: number
+  height: number
+  width: number
+  leftCorner: string
+  rightCorner: string
+  pasteDirection: string
+  installProcessId: number
+  openMethod: string
+  processType: string
+  isShaping: boolean
+  pleatsNum: number
+  pleatsDistance: number
+  skirtHeight: number
+  note: string
+  createTime: string
+  structureName: string
+  installProcessName: string
+  materials: SalesOrderMaterialDetail[]
+}
+
+/** 窗帘行详情 */
+export interface SalesOrderCurtainDetail {
+  id: number
+  orderId: number
+  curtainId: number
+  room: string
+  pleatRatioValue: number
+  discountRate: number
+  amount: number
+  image1: string
+  image2: string
+  mountings: string
+  note: string
+  pleatsDistance: number
+  createTime: string
+  curtainName: string
+  structures: SalesOrderStructureDetail[]
+}
+
+/** 销售订单完整详情 */
+export interface SalesOrderDetail extends SalesOrder {
+  curtains: SalesOrderCurtainDetail[]
+}
+
+/** 获取销售订单完整详情 */
+export function getSalesOrderDetail(id: number) {
+  return httpGet<SalesOrderDetail>('/zc/sales-order/detail', { id })
+}
 
 /** 创建销售订单 */
 // TODO: export function createSalesOrder(data: Partial<SalesOrder>) { return httpPost<number>('/admin-api/zc/sales-order/create', data) }
