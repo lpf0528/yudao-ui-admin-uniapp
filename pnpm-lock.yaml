@@ -81,6 +81,9 @@ importers:
       pinia-plugin-persistedstate:
         specifier: 3.2.1
         version: 3.2.1(pinia@2.0.36(typescript@5.8.3)(vue@3.4.21(typescript@5.8.3)))
+      qrcode-generator:
+        specifier: ^2.0.4
+        version: 2.0.4
       vue:
         specifier: ^3.4.21
         version: 3.4.21(typescript@5.8.3)
@@ -150,7 +153,7 @@ importers:
         version: 1.0.0-alpha.6(@uni-helper/uni-app-types@1.0.0-alpha.6(typescript@5.8.3)(vue@3.4.21(typescript@5.8.3)))(@uni-helper/uni-cloud-types@1.0.0-alpha.6(typescript@5.8.3)(vue@3.4.21(typescript@5.8.3)))(@uni-helper/uni-ui-types@1.0.0-alpha.6(@uni-helper/uni-app-types@1.0.0-alpha.6(typescript@5.8.3)(vue@3.4.21(typescript@5.8.3)))(typescript@5.8.3)(vue@3.4.21(typescript@5.8.3)))(typescript@5.8.3)(vue@3.4.21(typescript@5.8.3))
       '@uni-helper/unocss-preset-uni':
         specifier: 0.2.11
-        version: 0.2.11(@unocss/preset-legacy-compat@66.0.0)(@unocss/preset-mini@66.6.8)(@unocss/rule-utils@66.5.3)(@unocss/vite@66.0.0(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3)))(unocss-applet@0.11.0(unocss@66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3))))(unocss@66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3)))
+        version: 0.2.11(@unocss/preset-legacy-compat@66.0.0)(@unocss/preset-mini@66.6.8)(@unocss/rule-utils@66.6.8)(@unocss/vite@66.0.0(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3)))(unocss-applet@0.11.0(unocss@66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3))))(unocss@66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3)))
       '@uni-helper/vite-plugin-uni-components':
         specifier: 0.2.3
         version: 0.2.3(rollup@4.50.0)
@@ -2354,10 +2357,6 @@ packages:
 
   '@unocss/rule-utils@66.5.0':
     resolution: {integrity: sha512-+yqGZP8fR/G/gOkjXSXjmgTXFr4zGCQR+rA3Ana4xVoLIttcmPk4qO1IWcUVRQTDDqFmUjW/XwWmChta+rdQsA==}
-    engines: {node: '>=14'}
-
-  '@unocss/rule-utils@66.5.3':
-    resolution: {integrity: sha512-3aDxWw3fBjA2hldu5r126Dxl10nP/1dEx+fetiWEGT6X4J9dvJgNAGAJOVZeKv6tSfhqLyFsRV/cSbApYItCYw==}
     engines: {node: '>=14'}
 
   '@unocss/rule-utils@66.6.8':
@@ -5134,6 +5133,9 @@ packages:
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
+
+  qrcode-generator@2.0.4:
+    resolution: {integrity: sha512-mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g==}
 
   qrcode-reader@1.0.4:
     resolution: {integrity: sha512-rRjALGNh9zVqvweg1j5OKIQKNsw3bLC+7qwlnead5K/9cb1cEIAGkwikt/09U0K+2IDWGD9CC6SP7tHAjUeqvQ==}
@@ -9010,11 +9012,11 @@ snapshots:
       typescript: 5.8.3
       vue: 3.4.21(typescript@5.8.3)
 
-  '@uni-helper/unocss-preset-uni@0.2.11(@unocss/preset-legacy-compat@66.0.0)(@unocss/preset-mini@66.6.8)(@unocss/rule-utils@66.5.3)(@unocss/vite@66.0.0(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3)))(unocss-applet@0.11.0(unocss@66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3))))(unocss@66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3)))':
+  '@uni-helper/unocss-preset-uni@0.2.11(@unocss/preset-legacy-compat@66.0.0)(@unocss/preset-mini@66.6.8)(@unocss/rule-utils@66.6.8)(@unocss/vite@66.0.0(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3)))(unocss-applet@0.11.0(unocss@66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3))))(unocss@66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3)))':
     dependencies:
       '@uni-helper/uni-env': 0.1.8
       '@unocss/preset-legacy-compat': 66.0.0
-      '@unocss/rule-utils': 66.5.3
+      '@unocss/rule-utils': 66.6.8
       unocss: 66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3))
       unocss-applet: 0.11.0(unocss@66.0.0(postcss@8.5.6)(vite@5.2.8(@types/node@20.19.11)(sass@1.77.8)(terser@5.43.1))(vue@3.4.21(typescript@5.8.3)))
     optionalDependencies:
@@ -9297,11 +9299,6 @@ snapshots:
     dependencies:
       '@unocss/core': 66.5.1
       magic-string: 0.30.18
-
-  '@unocss/rule-utils@66.5.3':
-    dependencies:
-      '@unocss/core': 66.6.8
-      magic-string: 0.30.21
 
   '@unocss/rule-utils@66.6.8':
     dependencies:
@@ -12581,6 +12578,8 @@ snapshots:
       punycode: 2.3.1
 
   punycode@2.3.1: {}
+
+  qrcode-generator@2.0.4: {}
 
   qrcode-reader@1.0.4: {}
 

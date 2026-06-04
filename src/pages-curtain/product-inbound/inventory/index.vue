@@ -159,7 +159,14 @@ async function handleCheckSubmit() {
 }
 
 function handlePrintLabel(item: ZcProductBatch) {
-  uni.navigateTo({ url: `/pages-curtain/product-inbound/print-label/index?batchId=${item.id}&batchNo=${encodeURIComponent(item.batchNo || String(item.id))}` })
+  const enc = encodeURIComponent
+  const query = `batchId=${item.id}`
+    + `&batchNo=${enc(item.batchNo || String(item.id))}`
+    + `&productName=${enc(item.productName || '')}`
+    + `&versionName=${enc(item.versionName || '')}`
+    + `&specValue=${enc(item.specValue || '')}`
+    + `&note=${enc(item.note || '')}`
+  uni.navigateTo({ url: `/pages-curtain/product-inbound/print-label/index?${query}` })
 }
 
 onReachBottom(() => { loadMore() })
