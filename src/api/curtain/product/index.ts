@@ -47,3 +47,38 @@ export interface ZcProductBatchSaveReq {
 export function createProductBatchList(data: ZcProductBatchSaveReq[]) {
   return httpPost<number[]>('/zc/product-batch/create-batch', data)
 }
+
+export interface ZcProductBatch {
+  id: number
+  batchNo: string
+  inboundDate: string
+  productId: number
+  inboundPrice: number
+  inboundQuantity: number
+  quantity: number
+  warehouseId: number
+  supplierId: number
+  note: string
+  productName: string
+  productPrice: number
+  specValue: string
+  versionName: string
+  supplierName: string
+  warehouseName: string
+  unitValue: string
+  createTime: string
+}
+
+export interface ZcProductBatchPageParam {
+  pageNo: number
+  pageSize: number
+  productId?: number
+  warehouseId?: number
+  supplierId?: number
+  batchNo?: string
+  inboundDate?: string
+}
+
+export function getProductBatchPage(params: ZcProductBatchPageParam) {
+  return httpGet<PageResult<ZcProductBatch>>('/zc/product-batch/page', params as Record<string, any>)
+}
