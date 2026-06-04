@@ -162,6 +162,102 @@ function handlePrint() {
 }
 // #endif
 
+// #ifdef APP-PLUS
+// V2s: 58mm 纸，203 DPI，可打宽度 384 点
+const SUNMI_V2S_PRINT_WIDTH = 384
+const SUNMI_V2S_PRINT_HEIGHT = Math.round(SUNMI_V2S_PRINT_WIDTH * (CANVAS_H / CANVAS_W)) // 614
+
+let woyouService: any = null
+
+function connectSunmiPrinter(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const mainActivity = plus.android.runtimeMainActivity()
+      const Intent = plus.android.importClass('android.content.Intent')
+      const intent = new Intent('woyou.aidlservice.jiuiv5.IWoyouService')
+      intent.setPackage('woyou.aidlservice.jiuiv5')
+
+      // ServiceConnection：plus.android.implements 同样支持抽象类
+      const conn = plus.android.implements('android.content.ServiceConnection', {
+        onServiceConnected(_name: any, binder: any) {
+          // 通过反射获取 IWoyouService Stub 代理
+          try {
+            const IWoyouService = plus.android.importClass('woyou.aidlservice.jiuiv5.IWoyouService')
+            woyouService = IWoyouService.Stub.asInterface(binder)
+          } catch {
+            // 部分固件 Stub 不可直接 import，降级用 binder 直调
+            woyouService = binder
+          }
+          resolve()
+        },
+        onServiceDisconnected(_name: any) {
+          woyouService = null
+        },
+      })
+
+      // BIND_AUTO_CREATE = 1
+      const bound = mainActivity.bindService(intent, conn, 1)
+      if (!bound)
+        reject(new Error('商米打印服务绑定失败，请确认是 V2s 设备'))
+    } catch (e: any) {
+      reject(e)
+    }
+  })
+}
+
+async function handlePrintApp() {
+  if (!drawn.value) {
+    uni.showToast({ title: '图片生成中，请稍候', icon: 'none' })
+    return
+  }
+  saving.value = true
+  try {
+    // 1. Canvas → 临时文件，宽度对齐 V2s 打印点数 384px，避免打印机二次缩放
+    const tempFilePath = await new Promise<string>((resolve, reject) => {
+      uni.canvasToTempFilePath(
+        {
+          canvasId: 'label-canvas',
+          x: 0,
+          y: 0,
+          width: CANVAS_W,
+          height: CANVAS_H,
+          destWidth: SUNMI_V2S_PRINT_WIDTH,
+          destHeight: SUNMI_V2S_PRINT_HEIGHT,
+          fileType: 'png',
+          success: res => resolve(res.tempFilePath),
+          fail: reject,
+        },
+        instance?.proxy,
+      )
+    })
+
+    // 2. 连接商米 AIDL 打印服务（已连接则复用）
+    if (!woyouService)
+      await connectSunmiPrinter()
+
+    // 3. 文件路径 → Android Bitmap
+    const BitmapFactory = plus.android.importClass('android.graphics.BitmapFactory')
+    const realPath = tempFilePath.replace(/^file:\/\//, '')
+    const bitmap = BitmapFactory.decodeFile(realPath)
+    if (!bitmap)
+      throw new Error('图片解码失败，请重试')
+
+    // 4. 发送至 V2s 打印机
+    woyouService.printerInit(null)
+    woyouService.setAlignment(1, null) // 1 = 居中
+    woyouService.printBitmap(bitmap, null)
+    woyouService.lineWrap(3, null) // 走纸 3 行，确保标签完整撕出
+
+    uni.showToast({ title: '已发送至打印机', icon: 'success' })
+  } catch (e: any) {
+    console.error('[Sunmi Print]', e)
+    uni.showToast({ title: e.message || '打印失败，请重试', icon: 'none' })
+  } finally {
+    saving.value = false
+  }
+}
+// #endif
+
 onMounted(() => {
   const pages = getCurrentPages()
   const cur = pages[pages.length - 1] as any
@@ -198,6 +294,15 @@ onMounted(() => {
       <!-- #ifdef H5 -->
       <view class="btn btn-print" @click="handlePrint">
         打印
+      </view>
+      <!-- #endif -->
+      <!-- #ifdef APP-PLUS -->
+      <view
+        class="btn btn-print"
+        :class="{ disabled: saving || !drawn }"
+        @click="handlePrintApp"
+      >
+        {{ saving ? '打印中…' : '打印' }}
       </view>
       <!-- #endif -->
       <view
