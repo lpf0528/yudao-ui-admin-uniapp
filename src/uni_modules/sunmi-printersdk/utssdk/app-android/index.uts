@@ -1,0 +1,274 @@
+import PrinterNative from 'uni.app.UNI57F145C.PrinterNative'
+import { BaseStyle, TextStyle, Align, QrStyle, AreaStyle, BarcodeStyle, BitmapStyle } from '../interface.uts'
+
+
+// =========================================================
+//  打印实例 API (封装在 PrinterSdk 类中)
+// =========================================================
+export class PrinterSdk{
+	
+	static initPrinter(callback : (success : boolean, message : string) => void) {
+		PrinterNative.initPrinter(function (result : UTSJSONObject) {
+			const code = result.getNumber("code") as number
+			const msg = result.getString("msg") as string
+			const success = code === 0
+			callback(success, msg)
+		})
+	}
+	
+	static getPrinterInfo() : UTSJSONObject {
+		return PrinterNative.getPrinterInfo()
+	}
+	
+	static log(enable: boolean, str: string){
+		PrinterNative.log(enable, str)
+	}
+	
+	static destroy(){
+		PrinterNative.destroy()
+	}
+	
+	/**
+	 * 打开打印设置页面
+	 * @param item 设置项，对应 SDK SettingItem 枚举的 ordinal，0 为默认/主设置页。调用方可使用与 SettingItem 一致的枚举值传入。
+	 * @returns 是否成功调起设置页
+	 */
+	static startSettings(item : number = 0) : boolean {
+		return PrinterNative.startSettings(item.toInt())
+	}
+}
+
+// =========================================================
+//  基础/行式打印 API (封装在 LineApi 类中)
+// =========================================================
+
+export class LineApi {
+	
+	static enableTransMode(enable : boolean) {
+		PrinterNative.enableTransMode(enable)
+	}
+
+	static printTrans(callback : (success : boolean, message : string) => void) {
+		PrinterNative.printTrans(function (result : UTSJSONObject) {
+			const code = result.getNumber("code") as number
+			const msg = result.getString("msg") as string
+			const success = code === 0
+			callback(success, msg)
+		})
+	}
+
+	static initLine(baseStyle: BaseStyle) {
+		PrinterNative.initLine(
+			baseStyle.align.toInt(),
+			baseStyle.width.toInt(),
+			baseStyle.height.toInt(),
+			baseStyle.renderColor.toInt(),
+			baseStyle.posX.toInt()
+		)
+	}
+
+	static printText(text : string, textStyle : TextStyle) {
+		PrinterNative.printText(
+			text,
+			textStyle.align.toInt(),
+			textStyle.fontStyle.toInt(),
+			textStyle.textSize.toInt(),
+			textStyle.textWidthRatio.toInt(),
+			textStyle.textHeightRatio.toInt(),
+			textStyle.textSpace.toInt()
+		)
+	}
+
+	static addText(text : string, textStyle : TextStyle) {
+		PrinterNative.addText(
+			text,
+			textStyle.align.toInt(),
+			textStyle.fontStyle.toInt(),
+			textStyle.textSize.toInt(),
+			textStyle.textWidthRatio.toInt(),
+			textStyle.textHeightRatio.toInt()
+		)
+	}
+
+	static printTexts(textArray : Array<string>, colsWidthArr : Array<number>, textStyles : Array<TextStyle>) {
+		// 直接提取fontStyle和align的值
+		const fontStyles = textStyles.map(style => style.fontStyle as Int)
+		const aligns = textStyles.map(style => style.align as Int)
+
+		PrinterNative.printTexts(textArray, colsWidthArr, fontStyles, aligns)
+	}
+
+	static printBarCode(text : string, barcodeStyle : BarcodeStyle) {
+		PrinterNative.printBarCode(
+			text, 
+			barcodeStyle.align.toInt(), 
+			barcodeStyle.dotWitdh.toInt(), 
+			barcodeStyle.barHeight.toInt(), 
+			barcodeStyle.readable.toInt(), 
+			barcodeStyle.width.toInt(),
+			barcodeStyle.symbology.toInt()
+		)
+	}
+
+	static printQrCode(qrcode : string, qrStyle : QrStyle) {
+		PrinterNative.printQrCode(qrcode, qrStyle.align.toInt(), qrStyle.dot.toInt(),
+			qrStyle.width.toInt(), qrStyle.height.toInt(), qrStyle.errorLevel.toInt()
+		)
+	}
+
+	static printBitmap(bitmapBase64 : string, bitmapStyle : BitmapStyle) {
+		PrinterNative.printBitmap(
+			bitmapBase64,
+			bitmapStyle.align.toInt(),
+			bitmapStyle.width.toInt(),
+			bitmapStyle.height.toInt(),
+			bitmapStyle.posX.toInt(),
+			bitmapStyle.posY.toInt(),
+			bitmapStyle.algorithm.toInt(),
+			bitmapStyle.value.toInt()
+		)
+	}
+
+	static printDividingLine(lineType : Int, lineHeight : Int) {
+		PrinterNative.printDividingLine(lineType, lineHeight)
+	}
+
+	static autoOut() {
+		PrinterNative.autoOut()
+	}
+}
+
+// =========================================================
+//  Canvas 模式 API (封装在 CanvasApi 类中)
+// =========================================================
+
+export class CanvasApi {
+	
+	static initCanvasApi(baseStyle: BaseStyle) {
+		PrinterNative.initCanvasApi(
+			baseStyle.align.toInt(),
+			baseStyle.width.toInt(),
+			baseStyle.height.toInt(),
+			baseStyle.renderColor.toInt(),
+			baseStyle.posX.toInt()
+		)
+	}
+
+	static renderArea(areaStyle : AreaStyle) {
+		PrinterNative.renderArea(
+			areaStyle.width.toInt(),
+			areaStyle.height.toInt(),
+			areaStyle.posX.toInt(),
+			areaStyle.posY.toInt(),
+			areaStyle.endX.toInt(),
+			areaStyle.endY.toInt(),
+			areaStyle.thick.toInt(),
+			areaStyle.shape.toInt()
+		)
+	}
+
+	static renderText(text : string, textStyle : TextStyle) {
+		PrinterNative.renderText(
+			text,
+			textStyle.align.toInt(),
+			textStyle.fontStyle.toInt(),
+			textStyle.textSize.toInt(),
+			textStyle.textWidthRatio.toInt(),
+			textStyle.textHeightRatio.toInt(),
+			textStyle.posX.toInt(),
+			textStyle.posY.toInt(),
+			textStyle.width.toInt(),
+			textStyle.height.toInt(),
+			textStyle.rotate.toInt()
+		)
+	}
+
+	static renderBarCode(text : string, barcodeStyle : BarcodeStyle) {
+		PrinterNative.renderBarCode(
+			text,
+			barcodeStyle.align.toInt(),
+			barcodeStyle.dotWitdh.toInt(),
+			barcodeStyle.barWitdh.toInt(),
+			barcodeStyle.barHeight.toInt(),
+			barcodeStyle.posX.toInt(),
+			barcodeStyle.posY.toInt(),
+			barcodeStyle.width.toInt(),
+			barcodeStyle.height.toInt(),
+			barcodeStyle.readable.toInt()
+		)
+	}
+
+	static renderBitmap(bitmapBase64 : string, bitmapStyle : BitmapStyle) {
+		PrinterNative.renderBitmap(
+			bitmapBase64,
+			bitmapStyle.posX.toInt(),
+			bitmapStyle.posY.toInt(),
+			bitmapStyle.width.toInt(),
+			bitmapStyle.height.toInt()
+		)
+	}
+
+	static renderQrCode(qrcode : string, qrStyle : QrStyle) {
+		PrinterNative.renderQrCode(qrcode,
+			qrStyle.align.toInt(),
+			qrStyle.posX.toInt(),
+			qrStyle.posY.toInt(),
+			qrStyle.width.toInt(),
+			qrStyle.height.toInt(),
+			qrStyle.dot.toInt()
+		)
+	}
+
+	static printCanvas(callback : (success : boolean, message : string) => void, count : Int) {
+		PrinterNative.printCanvas(function (result : UTSJSONObject) {
+			const code = result.getNumber("code") as number
+			const msg = result.getString("msg") as string
+			const success = code === 0
+			callback(success, msg)
+		}, count)
+	}
+}
+
+
+// =========================================================
+//  指令透传 API
+// =========================================================
+
+export class CommandApi {
+	static sendEscCommand(data : string | Array<Byte>) : void {
+		if (typeof data === 'string') {
+			PrinterNative.sendEscCommand(data as string)
+		} else {
+			PrinterNative.sendEscCommand((data as Array<Byte>).toByteArray())
+		}
+	}
+	static sendTsplCommand(data : string | Array<Byte>) : void {
+		if (typeof data === 'string') {
+			PrinterNative.sendTsplCommand(data as string)
+		} else {
+			PrinterNative.sendTsplCommand((data as Array<Byte>).toByteArray())
+		}
+	}
+}
+
+// =========================================================
+//  钱箱api
+// =========================================================
+
+export class CashDrawerApi {
+	/**
+	 * 打开钱箱（异步回调）
+	 * @param callback 回调参数：success 是否成功，message 说明信息
+	 */
+	static openCashDrawer(callback : (success : boolean, message : string) => void) : void {
+		PrinterNative.openCashDrawer(function (result : UTSJSONObject) {
+			const code = result.getNumber("code") as number
+			const msg = result.getString("msg") as string
+			const success = code === 0
+			callback(success, msg)
+		})
+	}
+	static isCashDrawerOpen() : boolean {
+		return PrinterNative.isCashDrawerOpen()
+	}
+}

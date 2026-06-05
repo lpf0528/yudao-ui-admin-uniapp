@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import qrcode from 'qrcode-generator'
 import { getCurrentInstance, onMounted, ref } from 'vue'
+// #ifdef APP-PLUS
+import { LineApi, PrinterSdk } from '@/uni_modules/sunmi-printersdk'
 import { navigateBackPlus } from '@/utils'
+// #endif
 
 definePage({
   style: {
@@ -163,45 +166,26 @@ function handlePrint() {
 // #endif
 
 // #ifdef APP-PLUS
-// V2s: 58mm 纸，203 DPI，可打宽度 384 点
-const SUNMI_V2S_PRINT_WIDTH = 384
-const SUNMI_V2S_PRINT_HEIGHT = Math.round(SUNMI_V2S_PRINT_WIDTH * (CANVAS_H / CANVAS_W)) // 614
+// 58mm 打印机：203 DPI，384 点宽
+const PRINT_WIDTH = 384
+const PRINT_HEIGHT = Math.round(PRINT_WIDTH * (CANVAS_H / CANVAS_W))
 
-let woyouService: any = null
+let printerReady = false
 
-function connectSunmiPrinter(): Promise<void> {
+/** 初始化商米 SDK 打印服务（5s 超时） */
+function initSunmiSdk(PrinterSdk: any): Promise<void> {
   return new Promise((resolve, reject) => {
-    try {
-      const mainActivity = plus.android.runtimeMainActivity()
-      const Intent = plus.android.importClass('android.content.Intent')
-      const intent = new Intent('woyou.aidlservice.jiuiv5.IWoyouService')
-      intent.setPackage('woyou.aidlservice.jiuiv5')
-
-      // ServiceConnection：plus.android.implements 同样支持抽象类
-      const conn = plus.android.implements('android.content.ServiceConnection', {
-        onServiceConnected(_name: any, binder: any) {
-          // 通过反射获取 IWoyouService Stub 代理
-          try {
-            const IWoyouService = plus.android.importClass('woyou.aidlservice.jiuiv5.IWoyouService')
-            woyouService = IWoyouService.Stub.asInterface(binder)
-          } catch {
-            // 部分固件 Stub 不可直接 import，降级用 binder 直调
-            woyouService = binder
-          }
-          resolve()
-        },
-        onServiceDisconnected(_name: any) {
-          woyouService = null
-        },
-      })
-
-      // BIND_AUTO_CREATE = 1
-      const bound = mainActivity.bindService(intent, conn, 1)
-      if (!bound)
-        reject(new Error('商米打印服务绑定失败，请确认是 V2s 设备'))
-    } catch (e: any) {
-      reject(e)
-    }
+    const timer = setTimeout(() => reject(new Error('初始化超时（5s）')), 5000)
+    PrinterSdk.initPrinter((success: boolean, message: string) => {
+      clearTimeout(timer)
+      console.log('[Sunmi] initPrinter:', success, message)
+      if (success) {
+        printerReady = true
+        resolve()
+      } else {
+        reject(new Error(message || '打印机初始化失败'))
+      }
+    })
   })
 }
 
@@ -211,8 +195,10 @@ async function handlePrintApp() {
     return
   }
   saving.value = true
+
   try {
-    // 1. Canvas → 临时文件，宽度对齐 V2s 打印点数 384px，避免打印机二次缩放
+    // 1. Canvas → 临时图片文件（384px 对齐 58mm 打印宽度）
+    uni.showToast({ title: `生成图片 ${PRINT_WIDTH}×${PRINT_HEIGHT}px…`, icon: 'none', duration: 1500 })
     const tempFilePath = await new Promise<string>((resolve, reject) => {
       uni.canvasToTempFilePath(
         {
@@ -221,8 +207,8 @@ async function handlePrintApp() {
           y: 0,
           width: CANVAS_W,
           height: CANVAS_H,
-          destWidth: SUNMI_V2S_PRINT_WIDTH,
-          destHeight: SUNMI_V2S_PRINT_HEIGHT,
+          destWidth: PRINT_WIDTH,
+          destHeight: PRINT_HEIGHT,
           fileType: 'png',
           success: res => resolve(res.tempFilePath),
           fail: reject,
@@ -230,28 +216,51 @@ async function handlePrintApp() {
         instance?.proxy,
       )
     })
+    uni.showToast({ title: '图片生成成功', icon: 'none', duration: 1000 })
 
-    // 2. 连接商米 AIDL 打印服务（已连接则复用）
-    if (!woyouService)
-      await connectSunmiPrinter()
+    // 2. 临时文件 → base64（plus.io.FileReader，APP 端稳定可用）
+    uni.showToast({ title: '转换图片格式…', icon: 'none', duration: 1000 })
+    const base64 = await new Promise<string>((resolve, reject) => {
+      plus.io.resolveLocalFileSystemURL(
+        tempFilePath,
+        (entry: any) => {
+          entry.file((file: any) => {
+            const reader = new plus.io.FileReader()
+            reader.onload = (e: any) => {
+              // readAsDataURL 返回 "data:image/png;base64,xxx"，截取逗号后内容
+              const result: string = e.target.result
+              resolve(result.includes(',') ? result.split(',')[1] : result)
+            }
+            reader.onerror = (e: any) => reject(new Error(`文件读取失败: ${JSON.stringify(e)}`))
+            reader.readAsDataURL(file)
+          }, reject)
+        },
+        reject,
+      )
+    })
 
-    // 3. 文件路径 → Android Bitmap
-    const BitmapFactory = plus.android.importClass('android.graphics.BitmapFactory')
-    const realPath = tempFilePath.replace(/^file:\/\//, '')
-    const bitmap = BitmapFactory.decodeFile(realPath)
-    if (!bitmap)
-      throw new Error('图片解码失败，请重试')
+    // 3. 初始化打印服务（复用已就绪的连接）
+    if (!printerReady) {
+      uni.showToast({ title: '初始化打印机…', icon: 'none', duration: 2000 })
+      await initSunmiSdk(PrinterSdk)
+      uni.showToast({ title: '打印机连接成功', icon: 'none', duration: 1500 })
+    } else {
+      uni.showToast({ title: '打印机已就绪（复用）', icon: 'none', duration: 800 })
+    }
 
-    // 4. 发送至 V2s 打印机
-    woyouService.printerInit(null)
-    woyouService.setAlignment(1, null) // 1 = 居中
-    woyouService.printBitmap(bitmap, null)
-    woyouService.lineWrap(3, null) // 走纸 3 行，确保标签完整撕出
+    // 5. 打印图片（LineApi：全宽居中）
+    // BaseStyle: align 2=CENTER, renderColor 0=BLACK
+    // BitmapStyle: algorithm 0=BINARIZATION, value 0=默认阈值
+    uni.showToast({ title: '发送图片至打印机…', icon: 'none', duration: 1500 })
+    LineApi.initLine({ align: 2, width: PRINT_WIDTH, height: 0, renderColor: 0, posX: 0 })
+    LineApi.printBitmap(base64, { width: PRINT_WIDTH, height: PRINT_HEIGHT, posX: 0, posY: 0, align: 2, algorithm: 0, value: 0 })
+    LineApi.autoOut()
 
-    uni.showToast({ title: '已发送至打印机', icon: 'success' })
+    uni.showToast({ title: '已发送至打印机 ✓', icon: 'success' })
   } catch (e: any) {
-    console.error('[Sunmi Print]', e)
-    uni.showToast({ title: e.message || '打印失败，请重试', icon: 'none' })
+    printerReady = false
+    console.error('[Print]', e)
+    uni.showToast({ title: e.message || '打印失败，请重试', icon: 'none', duration: 3000 })
   } finally {
     saving.value = false
   }

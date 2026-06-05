@@ -1,0 +1,624 @@
+/**
+ * interface.uts
+ * uts插件接口定义文件，按规范定义接口文件可以在HBuilderX中更好的做到语法提示
+ */
+
+
+/* 打印字体样式 */
+export type TextStyle = {
+    align: number, 
+	fontStyle: number,
+	textSize: number,
+	textWidthRatio: number,
+	textHeightRatio: number,
+	posX: number,
+	posY: number,
+	width:number,
+	height: number, 
+	rotate: number,
+	textSpace: number,
+}
+
+// 数字枚举
+export enum Align {
+    DEFAULT = 0, // 默认
+    LEFT = 1,  // 居左
+    CENTER = 2,  // 居中
+    RIGHT = 3 // 居右
+}
+
+export enum FontStyle {
+    NORMAL = 0,        // 正常
+    BOLD = 1,     // 粗体
+	UNDERLINE = 2, // 下划线
+    STRIKETHROUGH = 3, // 删除线
+	ITALIC = 4,   // 斜体
+	Invert = 5,   // 文本倒置
+	AntiColor = 6,   // 文本反白
+}
+
+/** 打印设置页枚举，与商米 SDK SettingItem 一致，用于 startSettings(item) */
+export enum SettingItem {
+	ALL = 0,       // 其他配置项
+	TYPE = 1,     // 默认/主设置页，切换打印机类型（热敏/标签等）
+	DENSITY = 2,  // 打印机浓度
+	PAPER = 3,    // 纸张规格
+	FONT = 4,     // 字体
+}
+
+/* 打印字体样式 */
+export type QrStyle = {
+    align: number,
+	dot: number,
+	width: number,
+	height: number,
+	posX: number,
+	posY: number,
+	errorLevel: number
+}
+
+/* 二维码纠错等级 */
+export enum ErrorLevel {
+	L = 0,
+	M = 1,
+	Q = 2,
+	H = 3,
+}
+
+/**
+ * QrStyle 链式构建器，类似 Java Builder 模式。
+ * 默认值与 SDK QrStyle.getStyle() 一致：dotSize=4, errorLevel=L(0), width/height=-1, xOffset/yOffset=0, align=DEFAULT(0)。
+ * 示例：QrStyleBuilder.create().build() 或 QrStyleBuilder.create().align(Align.CENTER).dot(8).build()
+ */
+export class QrStyleBuilder {
+	_align: number = Align.DEFAULT as number
+	_dot: number = 4
+	_width: number = -1
+	_height: number = -1
+	_posX: number = 0
+	_posY: number = 0
+	_errorLevel: number = ErrorLevel.L as number
+
+	static create(): QrStyleBuilder {
+		return new QrStyleBuilder()
+	}
+
+	align(v: number): QrStyleBuilder {
+		this._align = v
+		return this
+	}
+
+	dot(v: number): QrStyleBuilder {
+		this._dot = v
+		return this
+	}
+
+	width(v: number): QrStyleBuilder {
+		this._width = v
+		return this
+	}
+
+	height(v: number): QrStyleBuilder {
+		this._height = v
+		return this
+	}
+
+	posX(v: number): QrStyleBuilder {
+		this._posX = v
+		return this
+	}
+
+	posY(v: number): QrStyleBuilder {
+		this._posY = v
+		return this
+	}
+
+	errorLevel(v: number): QrStyleBuilder {
+		this._errorLevel = v
+		return this
+	}
+
+	build(): QrStyle {
+		return {
+			align: this._align,
+			dot: this._dot,
+			width: this._width,
+			height: this._height,
+			posX: this._posX,
+			posY: this._posY,
+			errorLevel: this._errorLevel
+		} as QrStyle
+	}
+}
+
+/* 打印分割线类型 */
+export enum DividingLine {
+    EMPTY = 0,       // 空的
+    SOLID = 1,       // 实心
+    DOTTED = 2       // 点
+}
+
+/* 标签打印区域样式 */
+export type AreaStyle = {
+	width: number,
+	height: number,
+	posX: number,
+	posY: number,
+	endX: number,
+	endY: number,
+	thick: number,
+	shape: number
+}
+
+/** 区域形状类型（用于 AreaStyle） */
+export enum Shape {
+	RECT_FILL = 0,
+	RECT_WHITE = 1,
+	RECT_REVERSE = 2,
+	BOX = 3,
+	CIRCLE = 4,
+	OVAL = 5,
+	PATH = 6,
+}
+
+/**
+ * AreaStyle 链式构建器，类似 Java Builder 模式。
+ * 不传的参数使用默认值，最后调用 build() 得到 AreaStyle。
+ * 示例：AreaStyleBuilder.create().width(384).height(219).shape(Shape.BOX).build()
+ */
+export class AreaStyleBuilder {
+	_width: number = 240
+	_height: number = 159
+	_posX: number = 0
+	_posY: number = 0
+	_endX: number = 0
+	_endY: number = 0
+	_thick: number = 1
+	_shape: number = Shape.BOX as number
+
+	static create(): AreaStyleBuilder {
+		return new AreaStyleBuilder()
+	}
+
+	width(v: number): AreaStyleBuilder {
+		this._width = v
+		return this
+	}
+
+	height(v: number): AreaStyleBuilder {
+		this._height = v
+		return this
+	}
+
+	posX(v: number): AreaStyleBuilder {
+		this._posX = v
+		return this
+	}
+
+	posY(v: number): AreaStyleBuilder {
+		this._posY = v
+		return this
+	}
+
+	endX(v: number): AreaStyleBuilder {
+		this._endX = v
+		return this
+	}
+
+	endY(v: number): AreaStyleBuilder {
+		this._endY = v
+		return this
+	}
+
+	thick(v: number): AreaStyleBuilder {
+		this._thick = v
+		return this
+	}
+
+	shape(v: number): AreaStyleBuilder {
+		this._shape = v
+		return this
+	}
+
+	build(): AreaStyle {
+		return {
+			width: this._width,
+			height: this._height,
+			posX: this._posX,
+			posY: this._posY,
+			endX: this._endX,
+			endY: this._endY,
+			thick: this._thick,
+			shape: this._shape
+		} as AreaStyle
+	}
+}
+
+export type BitmapStyle = {
+	width: number,
+	height: number,
+	posX: number,
+	posY: number, 
+	align: number, 
+	algorithm: number,
+	value: number
+}
+
+/* 文字旋转角度类型 */
+export enum Rotate {
+    ROTATE_0 = 0,       
+    ROTATE_90 = 90,      
+    ROTATE_180 = 180,       
+    ROTATE_270 = 270       
+}
+
+/* 图片转换算法类型 */
+export enum ImageAlgorithm{
+	BINARIZATION = 0,
+	DITHERING = 1
+}
+
+/**
+ * BitmapStyle 链式构建器，类似 Java Builder 模式。
+ * 不传的参数使用默认值，最后调用 build() 得到 BitmapStyle。
+ * 示例：BitmapStyleBuilder.create().align(Align.CENTER).width(384).height(150).algorithm(ImageAlgorithm.BINARIZATION).value(120).build()
+ */
+export class BitmapStyleBuilder {
+	_align: number = Align.DEFAULT as number
+	_width: number = 0
+	_height: number = 0
+	_posX: number = 0
+	_posY: number = 0
+	_algorithm: number = ImageAlgorithm.BINARIZATION as number
+	_value: number = 0
+
+	static create(): BitmapStyleBuilder {
+		return new BitmapStyleBuilder()
+	}
+
+	align(v: number): BitmapStyleBuilder {
+		this._align = v
+		return this
+	}
+
+	width(v: number): BitmapStyleBuilder {
+		this._width = v
+		return this
+	}
+
+	height(v: number): BitmapStyleBuilder {
+		this._height = v
+		return this
+	}
+
+	posX(v: number): BitmapStyleBuilder {
+		this._posX = v
+		return this
+	}
+
+	posY(v: number): BitmapStyleBuilder {
+		this._posY = v
+		return this
+	}
+
+	algorithm(v: number): BitmapStyleBuilder {
+		this._algorithm = v
+		return this
+	}
+
+	value(v: number): BitmapStyleBuilder {
+		this._value = v
+		return this
+	}
+
+	build(): BitmapStyle {
+		return {
+			width: this._width,
+			height: this._height,
+			posX: this._posX,
+			posY: this._posY,
+			align: this._align,
+			algorithm: this._algorithm,
+			value: this._value
+		} as BitmapStyle
+	}
+}
+
+/* 热敏打印初始化样式 */
+export type BaseStyle = {
+	align: number,
+	width: number,
+	height: number,
+	renderColor: number,
+	posX: number
+}
+
+/* RenderColor仅在支持双色打印的商米设备上生效，同时双色打印需要打印纸支持 */
+export enum RenderColor {
+	BLACK = 0, 
+	RED = 1
+}
+
+/**
+ * BaseStyle 链式构建器，类似 Java Builder 模式。
+ * 不传的参数使用默认值，最后调用 build() 得到 BaseStyle。
+ * 示例：BaseStyleBuilder.create().align(Align.CENTER).build()
+ *       BaseStyleBuilder.create().align(Align.LEFT).width(384).build()
+ */
+export class BaseStyleBuilder {
+	_align: number = Align.DEFAULT as number
+	_width: number = 0
+	_height: number = 0
+	_renderColor: number = RenderColor.BLACK as number
+	_posX: number = 0
+
+	static create(): BaseStyleBuilder {
+		return new BaseStyleBuilder()
+	}
+
+	align(v: number): BaseStyleBuilder {
+		this._align = v
+		return this
+	}
+
+	width(v: number): BaseStyleBuilder {
+		this._width = v
+		return this
+	}
+
+	height(v: number): BaseStyleBuilder {
+		this._height = v
+		return this
+	}
+
+	renderColor(v: number): BaseStyleBuilder {
+		this._renderColor = v
+		return this
+	}
+
+	posX(v: number): BaseStyleBuilder {
+		this._posX = v
+		return this
+	}
+
+	build(): BaseStyle {
+		return {
+			align: this._align,
+			width: this._width,
+			height: this._height,
+			renderColor: this._renderColor,
+			posX: this._posX
+		} as BaseStyle
+	}
+}
+
+/**
+ * TextStyle 链式构建器，类似 Java Builder 模式。
+ * 不传的参数使用默认值，最后调用 build() 得到 TextStyle。
+ * 示例：TextStyleBuilder.create().align(Align.LEFT).fontStyle(FontStyle.NORMAL).build()
+ */
+export class TextStyleBuilder {
+	_align: number = Align.DEFAULT as number
+	_fontStyle: number = FontStyle.NORMAL as number
+	_textSize: number = 24
+	_textWidthRatio: number = 0
+	_textHeightRatio: number = 0
+	_posX: number = 0
+	_posY: number = 0
+	_width: number = 0
+	_height: number = 0
+	_rotate: number = Rotate.ROTATE_0 as number
+	_textSpace: number = 0
+
+	static create(): TextStyleBuilder {
+		return new TextStyleBuilder()
+	}
+
+	align(v: number): TextStyleBuilder {
+		this._align = v
+		return this
+	}
+
+	fontStyle(v: number): TextStyleBuilder {
+		this._fontStyle = v
+		return this
+	}
+
+	textSize(v: number): TextStyleBuilder {
+		this._textSize = v
+		return this
+	}
+
+	textWidthRatio(v: number): TextStyleBuilder {
+		this._textWidthRatio = v
+		return this
+	}
+
+	textHeightRatio(v: number): TextStyleBuilder {
+		this._textHeightRatio = v
+		return this
+	}
+
+	posX(v: number): TextStyleBuilder {
+		this._posX = v
+		return this
+	}
+
+	posY(v: number): TextStyleBuilder {
+		this._posY = v
+		return this
+	}
+
+	width(v: number): TextStyleBuilder {
+		this._width = v
+		return this
+	}
+
+	height(v: number): TextStyleBuilder {
+		this._height = v
+		return this
+	}
+
+	rotate(v: number): TextStyleBuilder {
+		this._rotate = v
+		return this
+	}
+
+	textSpace(v: number): TextStyleBuilder {
+		this._textSpace = v
+		return this
+	}
+
+	build(): TextStyle {
+		return {
+			align: this._align,
+			fontStyle: this._fontStyle,
+			textSize: this._textSize,
+			textWidthRatio: this._textWidthRatio,
+			textHeightRatio: this._textHeightRatio,
+			posX: this._posX,
+			posY: this._posY,
+			width: this._width,
+			height: this._height,
+			rotate: this._rotate,
+			textSpace: this._textSpace
+		} as TextStyle
+	}
+}
+
+/* barcode 底部文字类型 */
+export enum HumanReadable {
+	HIDE = 0,
+	POS_ONE = 1,
+	POS_TWO = 2,
+	POS_THREE = 3,
+}
+
+/* 打印条码样式 */
+export type BarcodeStyle = {
+	 align: number,
+	 dotWitdh: number, 
+	 barWitdh: number,
+	 barHeight: number, 
+	 posX: number,
+	 posY: number,
+	 width: number,
+	 height: number,
+	 readable: number,
+	 symbology: number
+}
+
+/* 条码类型*/ 
+export enum Symbology {
+	UPCA = 0,
+	UPCE = 1,
+	EAN13 = 2,
+	EAN8 = 3,
+	CODE39 = 4,
+	ITF = 5,
+	CODABAR = 6,
+	CODE93 = 7,
+	CODE128 = 8,
+	EAN128 = 9,
+	CODE128A = 10,
+	ITF_C = 11,
+	CODE39_S = 12,
+	CODE39_C = 13,
+	EAN13_2 = 14,
+	UPCA_2 = 15,
+	UPCA_5 = 16,
+	EAN13_5 = 17,
+	EAN8_2 = 18,
+	EAN8_5 = 19,
+	UPCE_2 = 20,
+	UPCE_5 = 21,
+}
+
+/**
+ * BarcodeStyle 链式构建器，类似 Java Builder 模式。
+ * 默认值与 SDK BarcodeStyle 一致，外部可不传，使用默认配置即可正常打印。
+ * 默认：dotWidth=2, barHeight=162, readable=HIDE, symbology=CODE128, width/height=-1, posX/posY=0, align=DEFAULT。
+ * 示例：BarcodeStyleBuilder.create().build() 或 BarcodeStyleBuilder.create().posX(180).posY(50).width(220).build()
+ */
+export class BarcodeStyleBuilder {
+	_align: number = Align.DEFAULT as number
+	_dotWitdh: number = 2
+	_barWitdh: number = 0
+	_barHeight: number = 162
+	_readable: number = HumanReadable.HIDE as number
+	_posX: number = 0
+	_posY: number = 0
+	_width: number = -1
+	_height: number = -1
+	_symbology: number = Symbology.CODE128 as number
+
+	static create(): BarcodeStyleBuilder {
+		return new BarcodeStyleBuilder()
+	}
+
+	align(v: number): BarcodeStyleBuilder {
+		this._align = v
+		return this
+	}
+
+	dotWidth(v: number): BarcodeStyleBuilder {
+		this._dotWitdh = v
+		return this
+	}
+
+	barWidth(v: number): BarcodeStyleBuilder {
+		this._barWitdh = v
+		return this
+	}
+
+	barHeight(v: number): BarcodeStyleBuilder {
+		this._barHeight = v
+		return this
+	}
+
+	readable(v: number): BarcodeStyleBuilder {
+		this._readable = v
+		return this
+	}
+
+	posX(v: number): BarcodeStyleBuilder {
+		this._posX = v
+		return this
+	}
+
+	posY(v: number): BarcodeStyleBuilder {
+		this._posY = v
+		return this
+	}
+
+	width(v: number): BarcodeStyleBuilder {
+		this._width = v
+		return this
+	}
+
+	height(v: number): BarcodeStyleBuilder {
+		this._height = v
+		return this
+	}
+
+	symbology(v: number): BarcodeStyleBuilder {
+		this._symbology = v
+		return this
+	}
+
+	build(): BarcodeStyle {
+		return {
+			align: this._align,
+			dotWitdh: this._dotWitdh,
+			barWitdh: this._barWitdh,
+			barHeight: this._barHeight,
+			readable: this._readable,
+			posX: this._posX,
+			posY: this._posY,
+			width: this._width,
+			height: this._height,
+			symbology: this._symbology
+		} as BarcodeStyle
+	}
+}
+
