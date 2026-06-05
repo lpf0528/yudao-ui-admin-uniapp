@@ -102,7 +102,7 @@
         @click="handleDetail(item)"
       >
         <view class="p-24rpx">
-          <!-- 头部：订单类型 + 序号 + 订单号 + 状态 -->
+          <!-- 头部：订单类型 + 序号 + 订单号 + 套数 | 加急 -->
           <view class="mb-16rpx flex items-center justify-between">
             <view class="flex items-center gap-8rpx">
               <view v-if="item.types" class="order-type" :class="[`status-${getTypeColorType(item.types)}`]">
@@ -111,9 +111,12 @@
               <view class="text-30rpx text-[#333] font-semibold">
                 {{ index + 1 }}、{{ item.orderNo }}
               </view>
+              <view class="text-24rpx text-[#999]">
+                共{{ item.sets ?? 0 }}套
+              </view>
             </view>
-            <view class="order-status" :class="[`status-${getStatusColorType(item.status)}`]">
-              {{ getStatusLabel(item.status) }}
+            <view v-if="item.isExpedited" class="urgent-tag">
+              加急
             </view>
           </view>
 
@@ -128,9 +131,11 @@
               </view>
             </view>
             <view class="order-item">
-              <view class="label" />
-              <view class="value">
-                共2套
+              <view class="label">
+                订单状态:
+              </view>
+              <view class="order-status" :class="[`status-${getStatusColorType(item.status)}`]">
+                {{ getStatusLabel(item.status) }}
               </view>
             </view>
             <view class="order-item">
@@ -490,6 +495,17 @@ onMounted(() => {
   border-radius: 4rpx;
   font-size: 26rpx;
   font-weight: 500;
+}
+
+.urgent-tag {
+  display: inline-block;
+  padding: 2rpx 12rpx;
+  border-radius: 4rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+  background-color: #fff1f0;
+  color: #ff4d4f;
+  border: 1rpx solid #ffccc7;
 }
 
 .order-item {

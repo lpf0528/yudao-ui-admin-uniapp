@@ -23,6 +23,7 @@ export interface SalesOrder {
   status: string
   confirmTime: string
   isExpedited: boolean
+  sets: number
   note: string
   customerName: string
   logisticName: string
@@ -41,7 +42,7 @@ export interface SalesOrderPageParam {
 
 /** 获取销售订单分页 */
 export function getSalesOrderPage(params: SalesOrderPageParam) {
-  return httpGet<PageResult<SalesOrder>>('/zc/sales-order/page', params as Record<string, any>)
+  return httpGet<PageResult<SalesOrder>>('/zc/sales-order/app/page', params as Record<string, any>)
 }
 
 /** 用料明细 */
