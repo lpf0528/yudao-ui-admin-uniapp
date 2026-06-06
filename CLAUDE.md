@@ -65,7 +65,19 @@ http.get<MyType>('/curtain/order/page', params)
 
 `src/api/` 按业务模块分目录，每个文件导出接口函数和对应 TypeScript 类型。
 
-窗帘模块：`src/api/curtain/order/index.ts` — 当前使用 mock 数据，接口 TODO 注释标明了真实后端地址，对接后端时按注释替换。
+窗帘模块已有接口文件：
+
+| 文件 | 说明 |
+|---|---|
+| `src/api/curtain/order/index.ts` | 销售订单（分页、详情、裁剪、撤销裁剪） |
+| `src/api/curtain/inventory-record/index.ts` | 库存变动记录（盘点创建、分页查询），操作类型：`PANDIAN/RUKU/CAIJIAN/CANCEL_CAIJIAN` |
+| `src/api/curtain/product/index.ts` | 产品与批次（批次分页 `getProductBatchPage`） |
+| `src/api/curtain/supplier/index.ts` | 供应商简单列表 `getSupplierSimpleList` |
+| `src/api/curtain/warehouse/index.ts` | 仓库简单列表 `getWarehouseSimpleList` |
+| `src/api/curtain/customer/index.ts` | 客户 |
+| `src/api/curtain/workshop-user/index.ts` | 工车间用户 |
+
+后端接口路径均以 `/zc/` 为前缀（如 `/zc/sales-order/app/page`、`/zc/inventory-record/page`）。未实现的接口在文件末尾以 `// TODO:` 注释标明，对接时直接取消注释并补全实现即可。
 
 ### 状态管理
 
@@ -89,6 +101,18 @@ http.get<MyType>('/curtain/order/page', params)
 ### 组件库
 
 主要用 **wot-design-uni**（组件前缀 `wd-`），自动按需引入无需 import。分页场景用 `z-paging`，也可用 `wd-loadmore` + 手动触底。
+
+### 打印插件（sunmi-printersdk）
+
+`src/uni_modules/sunmi-printersdk/` — 商米打印机 SDK，**仅 APP-PLUS 环境可用**，需用 `// #ifdef APP-PLUS` 条件编译包裹。
+
+| API 类 | 适用场景 |
+|---|---|
+| `LineApi` | 小票/流水单，按行组版，支持事务模式批量打印 |
+| `CanvasApi` | 标签/票据，按坐标精确定位文本/条码/二维码/图片 |
+| `CommandApi` | 直接发送 ESC/POS 或 TSPL 原始指令 |
+
+样式枚举（`Align`、`FontStyle`、`BaseStyleBuilder` 等）从 `@/uni_modules/sunmi-printersdk/utssdk/interface.uts` 引入。标签打印示例见 `src/pages-curtain/product-inbound/print-label/index.vue`（使用 `qrcode-generator` 生成二维码后通过 `LineApi` 打印）。
 
 ### 环境变量
 
@@ -121,6 +145,18 @@ http.get<MyType>('/curtain/order/page', params)
 ## 窗帘模块开发约定（智仓-窗帘仓储系统）
 
 - 新页面放 `src/pages-curtain/<功能>/index.vue`，子页面放 `src/pages-curtain/<功能>/<子功能>/index.vue`
-- API 接口放 `src/api/curtain/<功能>/index.ts`，当前 mock 数据标有 `// TODO: 接口实现后替换为` 注释，对接后端时按注释替换 mock 为真实 `http.get/post` 调用
+- API 接口放 `src/api/curtain/<功能>/index.ts`，未实现的接口以 `// TODO:` 注释标明，对接时取消注释并实现
 - 分页列表遵循 `queryParams`（pageNo/pageSize）+ `filterParams`（筛选条件）双 ref 模式，见 `src/pages-curtain/order/index.vue`
 - Tabbar 配置在 `src/tabbar/config.ts`，新增模块入口在此配置
+
+### 已实现页面概览
+
+| 页面路径 | 功能 |
+|---|---|
+| `src/pages-curtain/order/index.vue` | 销售订单列表 |
+| `src/pages-curtain/order/detail/index.vue` | 销售订单详情（含用料明细、裁剪操作入口） |
+| `src/pages-curtain/product-inbound/index.vue` | 产品入库 |
+| `src/pages-curtain/product-inbound/inventory/index.vue` | 库存盘点（扫码/搜索批次，调用 `createInventoryRecord`） |
+| `src/pages-curtain/product-inbound/print-label/index.vue` | 标签打印（生成二维码，通过商米 SDK 打印，APP 专属） |
+| `src/pages-curtain/cutting-outbound/index.vue` | 裁剪出库（选批次 + 录入裁剪数量，调用 `cutMaterial` / `cancelCutMaterial`） |
+| `src/pages-curtain/cutting-outbound/cutting-records/index.vue` | 裁剪记录（按批次查看库存变动历史） |
