@@ -1,6 +1,13 @@
 import type { PageParam, PageResult } from '@/http/types'
 import { httpGet, httpPost } from '@/http/http'
 
+export const OPERATE_TYPE = {
+  PANDIAN: 'PANDIAN',
+  RUKU: 'RUKU',
+  CAIJIAN: 'CAIJIAN',
+  CANCEL_CAIJIAN: 'CANCEL_CAIJIAN',
+} as const
+
 export interface ZcInventoryRecordSaveReq {
   productId: number
   batchId: number

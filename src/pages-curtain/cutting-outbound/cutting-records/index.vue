@@ -3,7 +3,18 @@ import type { ZcInventoryRecordRespVO } from '@/api/curtain/inventory-record'
 import type { LoadMoreState } from '@/http/types'
 import { onMounted, ref } from 'vue'
 import { getInventoryRecordPage } from '@/api/curtain/inventory-record'
+import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
+
+const dictStore = useDictStore()
+
+function getOperateLabel(val: string) {
+  return dictStore.getDictData('zc_inventory_operate', val)?.label ?? val ?? '-'
+}
+
+function getOperateColorType(val: string) {
+  return dictStore.getDictData('zc_inventory_operate', val)?.colorType ?? 'default'
+}
 
 definePage({
   style: {
@@ -20,17 +31,6 @@ const total = ref(0)
 const loadMoreState = ref<LoadMoreState>('loading')
 const queryParams = ref({ pageNo: 1, pageSize: 50 })
 const isLoadingMore = ref(false)
-
-const OPERATE_MAP: Record<string, { label: string, color: string, bg: string }> = {
-  PANDIAN: { label: '盘点', color: '#722ed1', bg: '#f9f0ff' },
-  RUKU: { label: '入库', color: '#52c41a', bg: '#f6ffed' },
-  CAIJIAN: { label: '裁剪', color: '#1890ff', bg: '#e6f7ff' },
-  CANCEL_CAIJIAN: { label: '撤销裁剪', color: '#ff4d4f', bg: '#fff2f0' },
-}
-
-function getOperateInfo(operate: string) {
-  return OPERATE_MAP[operate] ?? { label: operate, color: '#999', bg: '#f5f5f5' }
-}
 
 function handleBack() {
   navigateBackPlus()
@@ -98,9 +98,9 @@ onMounted(() => {
         class="record-card"
       >
         <view class="card-header">
-          <view class="operate-tag" :style="{ color: getOperateInfo(item.operate).color, backgroundColor: getOperateInfo(item.operate).bg }">
-            {{ getOperateInfo(item.operate).label }}
-          </view>
+          <wd-tag :type="getOperateColorType(item.operate)">
+            {{ getOperateLabel(item.operate) }}
+          </wd-tag>
           <view class="create-time">
             {{ item.createTime || '-' }}
           </view>
@@ -192,13 +192,6 @@ onMounted(() => {
   justify-content: space-between;
   padding: 20rpx 24rpx 16rpx;
   border-bottom: 1rpx solid #f5f5f5;
-}
-
-.operate-tag {
-  font-size: 24rpx;
-  font-weight: 500;
-  padding: 4rpx 16rpx;
-  border-radius: 20rpx;
 }
 
 .create-time {
