@@ -3,7 +3,7 @@ import type { SalesOrderCurtainDetail } from '@/api/curtain/order'
 import type { OrderOperationLog } from '@/api/curtain/order-operation-log'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain } from '@/api/curtain/order'
+import { cancelPackSalesOrderCurtain, cancelShipSalesOrderCurtain, getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain } from '@/api/curtain/order'
 import { getOrderOperationLogPage } from '@/api/curtain/order-operation-log'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
@@ -128,46 +128,61 @@ function switchTab(idx: number) {
 const packing = ref(false)
 const shipping = ref(false)
 
-async function handlePack() {
+function confirmAction(title: string, content: string, onConfirm: () => Promise<void>) {
   uni.showModal({
-    title: '确认打包',
-    content: '确认将该窗帘标记为已打包？',
+    title,
+    content,
     success: async (res) => {
-      if (!res.confirm)
-        return
-      packing.value = true
-      try {
-        await packSalesOrderCurtain(Number(props.curtainId))
-        uni.showToast({ title: '打包成功', icon: 'success' })
-        await loadDetail()
-      } catch {
-        uni.showToast({ title: '操作失败', icon: 'error' })
-      } finally {
-        packing.value = false
-      }
+      if (res.confirm)
+        await onConfirm()
     },
   })
 }
 
+async function handlePack() {
+  const isPacked = !!curtain.value?.packTime
+  confirmAction(
+    isPacked ? '确认撤销打包' : '确认打包',
+    isPacked ? '确认撤销该窗帘的打包状态？' : '确认将该窗帘标记为已打包？',
+    async () => {
+      packing.value = true
+      try {
+        if (isPacked) {
+          await cancelPackSalesOrderCurtain(Number(props.curtainId))
+          uni.showToast({ title: '撤销打包成功', icon: 'success' })
+        } else {
+          await packSalesOrderCurtain(Number(props.curtainId))
+          uni.showToast({ title: '打包成功', icon: 'success' })
+        }
+        await loadDetail()
+      } catch {} finally {
+        packing.value = false
+      }
+    },
+  )
+}
+
 async function handleShip() {
-  uni.showModal({
-    title: '确认发货',
-    content: '确认将该窗帘标记为已发货？',
-    success: async (res) => {
-      if (!res.confirm)
-        return
+  const isShipped = !!curtain.value?.shipTime
+  confirmAction(
+    isShipped ? '确认撤销发货' : '确认发货',
+    isShipped ? '确认撤销该窗帘的发货状态？' : '确认将该窗帘标记为已发货？',
+    async () => {
       shipping.value = true
       try {
-        await shipSalesOrderCurtain(Number(props.curtainId))
-        uni.showToast({ title: '发货成功', icon: 'success' })
+        if (isShipped) {
+          await cancelShipSalesOrderCurtain(Number(props.curtainId))
+          uni.showToast({ title: '撤销发货成功', icon: 'success' })
+        } else {
+          await shipSalesOrderCurtain(Number(props.curtainId))
+          uni.showToast({ title: '发货成功', icon: 'success' })
+        }
         await loadDetail()
-      } catch {
-        uni.showToast({ title: '操作失败', icon: 'error' })
-      } finally {
+      } catch {} finally {
         shipping.value = false
       }
     },
-  })
+  )
 }
 
 onShow(loadDetail)
@@ -274,11 +289,21 @@ onShow(loadDetail)
 
         <!-- 操作按钮 -->
         <view class="mx-24rpx mb-8rpx flex justify-end gap-24rpx rounded-12rpx bg-white px-24rpx py-20rpx shadow-[0_2rpx_8rpx_rgba(0,0,0,0.06)]">
-          <wd-button type="primary" custom-style="border-radius: 12rpx; font-size: 32rpx;" :loading="packing" @click="handlePack">
-            打包
+          <wd-button
+            :type="curtain.packTime ? 'warning' : 'primary'"
+            custom-style="border-radius: 12rpx; font-size: 32rpx;"
+            :loading="packing"
+            @click="handlePack"
+          >
+            {{ curtain.packTime ? '撤销打包' : '打包' }}
           </wd-button>
-          <wd-button type="success" custom-style="border-radius: 12rpx; font-size: 32rpx;" :loading="shipping" @click="handleShip">
-            发货
+          <wd-button
+            :type="curtain.shipTime ? 'warning' : 'success'"
+            custom-style="border-radius: 12rpx; font-size: 32rpx;"
+            :loading="shipping"
+            @click="handleShip"
+          >
+            {{ curtain.shipTime ? '撤销发货' : '发货' }}
           </wd-button>
         </view>
 

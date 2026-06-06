@@ -113,6 +113,8 @@ export interface SalesOrderCurtainDetail {
   pleatsDistance: number
   createTime: string
   curtainName: string
+  packTime: string | null
+  shipTime: string | null
   structures: SalesOrderStructureDetail[]
 }
 
@@ -151,6 +153,16 @@ export function packSalesOrderCurtain(id: number) {
 /** 发货窗帘行（将窗帘行状态更新为已发货，并联动更新订单状态） */
 export function shipSalesOrderCurtain(id: number) {
   return httpPut<boolean>('/zc/sales-order-curtain/ship', undefined, { id })
+}
+
+/** 撤销打包 */
+export function cancelPackSalesOrderCurtain(id: number) {
+  return httpPut<boolean>('/zc/sales-order-curtain/cancel-pack', undefined, { id })
+}
+
+/** 撤销发货 */
+export function cancelShipSalesOrderCurtain(id: number) {
+  return httpPut<boolean>('/zc/sales-order-curtain/cancel-ship', undefined, { id })
 }
 
 /** 创建销售订单 */
