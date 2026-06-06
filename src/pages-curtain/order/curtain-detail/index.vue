@@ -2,7 +2,7 @@
 import type { SalesOrderCurtainDetail } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { getSalesOrderDetail } from '@/api/curtain/order'
+import { getSalesOrderDetail, packSalesOrderCurtain } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -83,6 +83,29 @@ async function loadDetail() {
   } finally {
     loading.value = false
   }
+}
+
+const packing = ref(false)
+
+async function handlePack() {
+  uni.showModal({
+    title: '确认打包',
+    content: '确认将该窗帘标记为已打包？',
+    success: async (res) => {
+      if (!res.confirm)
+        return
+      packing.value = true
+      try {
+        await packSalesOrderCurtain(Number(props.curtainId))
+        uni.showToast({ title: '打包成功', icon: 'success' })
+        await loadDetail()
+      } catch {
+        uni.showToast({ title: '操作失败', icon: 'error' })
+      } finally {
+        packing.value = false
+      }
+    },
+  })
 }
 
 onShow(loadDetail)
@@ -170,6 +193,13 @@ onShow(loadDetail)
           <image v-if="curtain.image1" :src="curtain.image1" class="curtain-image" mode="aspectFill" @click="uni.previewImage({ urls: [curtain.image1!] })" />
           <image v-if="curtain.image2" :src="curtain.image2" class="curtain-image" mode="aspectFill" @click="uni.previewImage({ urls: [curtain.image2!] })" />
         </view>
+      </view>
+
+      <!-- 打包按钮 -->
+      <view class="mx-24rpx mb-8rpx flex justify-end rounded-12rpx bg-white px-24rpx py-20rpx shadow-[0_2rpx_8rpx_rgba(0,0,0,0.06)]">
+        <wd-button type="primary" custom-style="border-radius: 12rpx; font-size: 32rpx;" :loading="packing" @click="handlePack">
+          打包
+        </wd-button>
       </view>
 
       <!-- 结构明细 -->

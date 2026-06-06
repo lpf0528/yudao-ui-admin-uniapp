@@ -143,6 +143,11 @@ export function cancelCutMaterial(materialId: number) {
   return httpPut<boolean>('/zc/sales-order/cancel-cut-material', { materialId })
 }
 
+/** 打包窗帘行（将窗帘行状态更新为已打包，并联动更新订单状态） */
+export function packSalesOrderCurtain(id: number) {
+  return httpPut<boolean>('/zc/sales-order-curtain/pack', undefined, { id })
+}
+
 /** 创建销售订单 */
 // TODO: export function createSalesOrder(data: Partial<SalesOrder>) { return httpPost<number>('/admin-api/zc/sales-order/create', data) }
 
