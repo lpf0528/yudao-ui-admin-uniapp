@@ -27,6 +27,14 @@ function getStatusColorType(val: string) {
   return dictStore.getDictData('zc_order_status', val)?.colorType ?? 'default'
 }
 
+function getMatStatusLabel(val: string) {
+  return dictStore.getDictData('zc_order_batch_status', val)?.label ?? val ?? '-'
+}
+
+function getMatStatusColorType(val: string) {
+  return dictStore.getDictData('zc_order_batch_status', val)?.colorType ?? 'default'
+}
+
 function getTypeLabel(val: string) {
   return dictStore.getDictData('zc_order_type', val)?.label ?? val ?? '-'
 }
@@ -269,8 +277,8 @@ onMounted(async () => {
                   <view class="material-item-label">
                     状态
                   </view>
-                  <view class="material-item-value material-item-value--pending">
-                    未配料
+                  <view class="material-item-value" :class="`material-status-${getMatStatusColorType(mat.status)}`">
+                    {{ getMatStatusLabel(mat.status) }}
                   </view>
                 </view>
               </view>
@@ -463,10 +471,25 @@ onMounted(async () => {
   font-size: 28rpx;
   color: #333;
   word-break: break-all;
+}
 
-  &--pending {
-    color: #faad14;
-  }
+.material-status-warning {
+  color: #faad14;
+}
+.material-status-primary {
+  color: #1890ff;
+}
+.material-status-info {
+  color: #13c2c2;
+}
+.material-status-success {
+  color: #52c41a;
+}
+.material-status-danger {
+  color: #ff4d4f;
+}
+.material-status-default {
+  color: #999;
 }
 
 .status-warning {

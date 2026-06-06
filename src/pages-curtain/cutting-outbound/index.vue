@@ -5,7 +5,7 @@ import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
 import { computed, onMounted, ref } from 'vue'
 import { createInventoryRecord } from '@/api/curtain/inventory-record'
-import { cutMaterial } from '@/api/curtain/order'
+import { cancelCutMaterial, cutMaterial } from '@/api/curtain/order'
 import { getProductBatchPage } from '@/api/curtain/product'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
@@ -34,6 +34,7 @@ interface MatInfo {
   elementName: string
   quantity: number
   unitValue: string
+  status?: string
 }
 
 const matInfo = ref<MatInfo | null>(null)
@@ -62,6 +63,8 @@ const displayList = computed(() => {
 
   return result
 })
+const isCut = computed(() => matInfo.value?.status === 'HAVE_PEILIAO')
+
 const loadMoreState = ref<LoadMoreState>('loading')
 const queryParams = ref({ pageNo: 1, pageSize: 199 })
 const filterParams = ref<{ warehouseId?: number, supplierId?: number }>({})
@@ -238,6 +241,32 @@ function handlePrintLabel(item: ZcProductBatch) {
   uni.navigateTo({ url: `/pages-curtain/product-inbound/print-label/index?${query}` })
 }
 
+// ---------- 撤销裁剪 ----------
+const cancelSubmitting = ref(false)
+
+async function handleCancelCut() {
+  if (!matInfo.value)
+    return
+  uni.showModal({
+    title: '确认撤销裁剪',
+    content: '撤销后将回退批次库存并清空配料绑定，确认继续？',
+    success: async (res) => {
+      if (!res.confirm || !matInfo.value)
+        return
+      cancelSubmitting.value = true
+      try {
+        await cancelCutMaterial(matInfo.value.id)
+        uni.showToast({ title: '撤销成功', icon: 'success' })
+        navigateBackPlus()
+      } catch {
+        uni.showToast({ title: '撤销失败，请重试', icon: 'none' })
+      } finally {
+        cancelSubmitting.value = false
+      }
+    },
+  })
+}
+
 onMounted(() => {
   const pages = getCurrentPages()
   const current = pages[pages.length - 1] as any
@@ -249,6 +278,7 @@ onMounted(() => {
       matInfo.value = mat
       productId.value = mat.productId
       productName.value = mat.productName || ''
+      console.log('matInfo', mat)
     } catch {}
   } else {
     productId.value = opts.productId ? Number(opts.productId) : undefined
@@ -290,155 +320,172 @@ onMounted(() => {
       </view>
     </view>
 
-    <!-- Barcode 输入筛选 -->
-    <view class="barcode-bar">
-      <view class="barcode-input-wrap">
-        <text class="barcode-icon">⌕</text>
-        <input
-          v-model="barcodeInput"
-          class="barcode-input"
-          placeholder="扫码或输入批次号筛选"
-          confirm-type="search"
-        >
-        <text v-if="barcodeInput" class="barcode-clear" @click="barcodeInput = ''">✕</text>
+    <!-- 已裁剪：撤销区域 -->
+    <view v-if="isCut" class="cancel-cut-area">
+      <view class="cancel-cut-tip">
+        <text class="cancel-cut-tip-icon">✓</text>
+        <text class="cancel-cut-tip-text">该用料已完成裁剪</text>
       </view>
-    </view>
-
-    <!-- 筛选栏 -->
-    <view class="filter-bar">
-      <view class="filter-cell">
-        <text class="filter-label">仓库</text>
-        <picker
-          mode="selector"
-          :range="warehouseList"
-          range-key="name"
-          :value="warehouseIndex ?? 0"
-          @change="onWarehouseChange"
-        >
-          <view class="filter-trigger">
-            <text class="filter-value" :class="{ placeholder: warehouseIndex === null }">
-              {{ warehouseIndex !== null ? (warehouseList[warehouseIndex]?.name || '全部') : '全部仓库' }}
-            </text>
-            <text class="filter-arrow">▾</text>
-          </view>
-        </picker>
-        <text v-if="warehouseIndex !== null" class="filter-clear" @click.stop="clearWarehouse">✕</text>
-      </view>
-      <view class="filter-divider" />
-      <view class="filter-cell">
-        <text class="filter-label">供应商</text>
-        <picker
-          mode="selector"
-          :range="supplierList"
-          range-key="shortName"
-          :value="supplierIndex ?? 0"
-          @change="onSupplierChange"
-        >
-          <view class="filter-trigger">
-            <text class="filter-value" :class="{ placeholder: supplierIndex === null }">
-              {{ supplierIndex !== null ? (supplierList[supplierIndex]?.shortName || '全部') : '全部供应商' }}
-            </text>
-            <text class="filter-arrow">▾</text>
-          </view>
-        </picker>
-        <text v-if="supplierIndex !== null" class="filter-clear" @click.stop="clearSupplier">✕</text>
-      </view>
-    </view>
-
-    <!-- 统计条 -->
-    <view class="stat-bar">
-      <text class="stat-text">共 {{ total }} 条批次记录</text>
-    </view>
-
-    <!-- 批次列表 -->
-    <view class="p-24rpx">
       <view
-        v-for="item in displayList"
-        :key="item.id"
-        class="batch-card"
-        :class="{ 'batch-card--pinned': item.id === matInfo?.batchId }"
-        @click="handleCutBatch(item)"
+        class="cancel-cut-btn"
+        :class="{ loading: cancelSubmitting }"
+        @click="handleCancelCut"
       >
-        <!-- 顶部行：批号 + 日期 -->
-        <view class="card-header">
-          <view class="batch-no">
-            {{ item.batchNo || `批次 #${item.id}` }}
-          </view>
-          <view class="inbound-date">
-            {{ item.inboundDate || '-' }}
-          </view>
-        </view>
-
-        <!-- 数量信息 -->
-        <view class="quantity-row">
-          <view class="qty-block">
-            <view class="qty-label">
-              剩余库存
-            </view>
-            <view class="qty-value remaining">
-              {{ item.quantity }}
-              <text class="qty-unit">{{ getUnitLabel(item.unitValue) }}</text>
-            </view>
-          </view>
-          <view class="qty-divider" />
-          <view class="qty-block">
-            <view class="qty-label">
-              入库数量
-            </view>
-            <view class="qty-value">
-              {{ item.inboundQuantity }}
-              <text class="qty-unit">{{ getUnitLabel(item.unitValue) }}</text>
-            </view>
-          </view>
-          <view class="qty-divider" />
-          <view class="qty-block">
-            <view class="qty-label">
-              规格
-            </view>
-            <view class="qty-value">
-              {{ item.specValue || '-' }}
-            </view>
-          </view>
-        </view>
-
-        <!-- 详情信息 -->
-        <view class="detail-grid">
-          <view class="detail-item">
-            <text class="detail-label">版本</text>
-            <text class="detail-value">{{ item.versionName || '-' }}</text>
-          </view>
-          <view class="detail-item">
-            <text class="detail-label">仓库</text>
-            <text class="detail-value">{{ item.warehouseName || '-' }}</text>
-          </view>
-          <view class="detail-item">
-            <text class="detail-label">供应商</text>
-            <text class="detail-value">{{ item.supplierName || '-' }}</text>
-          </view>
-          <view v-if="item.note" class="detail-item full-width">
-            <text class="detail-label">备注</text>
-            <text class="detail-value">{{ item.note }}</text>
-          </view>
-        </view>
-
-        <!-- 操作按钮 -->
-        <view class="card-actions">
-          <view class="action-btn check-btn" @click.stop="handleStockCheck(item)">
-            库存盘点
-          </view>
-          <view class="action-btn record-btn" @click.stop="handleViewCuttingRecords(item)">
-            裁剪记录
-          </view>
-          <view class="action-btn print-btn" @click.stop="handlePrintLabel(item)">
-            打印标签
-          </view>
-        </view>
-      </view>
-
-      <view v-if="loadMoreState !== 'loading' && displayList.length === 0" class="py-100rpx text-center">
-        <wd-status-tip image="content" tip="暂无库存批次数据" />
+        {{ cancelSubmitting ? '撤销中...' : '撤销裁剪' }}
       </view>
     </view>
+
+    <template v-if="!isCut">
+      <!-- Barcode 输入筛选 -->
+      <view class="barcode-bar">
+        <view class="barcode-input-wrap">
+          <text class="barcode-icon">⌕</text>
+          <input
+            v-model="barcodeInput"
+            class="barcode-input"
+            placeholder="扫码或输入批次号筛选"
+            confirm-type="search"
+          >
+          <text v-if="barcodeInput" class="barcode-clear" @click="barcodeInput = ''">✕</text>
+        </view>
+      </view>
+
+      <!-- 筛选栏 -->
+      <view class="filter-bar">
+        <view class="filter-cell">
+          <text class="filter-label">仓库</text>
+          <picker
+            mode="selector"
+            :range="warehouseList"
+            range-key="name"
+            :value="warehouseIndex ?? 0"
+            @change="onWarehouseChange"
+          >
+            <view class="filter-trigger">
+              <text class="filter-value" :class="{ placeholder: warehouseIndex === null }">
+                {{ warehouseIndex !== null ? (warehouseList[warehouseIndex]?.name || '全部') : '全部仓库' }}
+              </text>
+              <text class="filter-arrow">▾</text>
+            </view>
+          </picker>
+          <text v-if="warehouseIndex !== null" class="filter-clear" @click.stop="clearWarehouse">✕</text>
+        </view>
+        <view class="filter-divider" />
+        <view class="filter-cell">
+          <text class="filter-label">供应商</text>
+          <picker
+            mode="selector"
+            :range="supplierList"
+            range-key="shortName"
+            :value="supplierIndex ?? 0"
+            @change="onSupplierChange"
+          >
+            <view class="filter-trigger">
+              <text class="filter-value" :class="{ placeholder: supplierIndex === null }">
+                {{ supplierIndex !== null ? (supplierList[supplierIndex]?.shortName || '全部') : '全部供应商' }}
+              </text>
+              <text class="filter-arrow">▾</text>
+            </view>
+          </picker>
+          <text v-if="supplierIndex !== null" class="filter-clear" @click.stop="clearSupplier">✕</text>
+        </view>
+      </view>
+
+      <!-- 统计条 -->
+      <view class="stat-bar">
+        <text class="stat-text">共 {{ total }} 条批次记录</text>
+      </view>
+
+      <!-- 批次列表 -->
+      <view class="p-24rpx">
+        <view
+          v-for="item in displayList"
+          :key="item.id"
+          class="batch-card"
+          :class="{ 'batch-card--pinned': item.id === matInfo?.batchId }"
+          @click="handleCutBatch(item)"
+        >
+          <!-- 顶部行：批号 + 日期 -->
+          <view class="card-header">
+            <view class="batch-no">
+              {{ item.batchNo || `批次 #${item.id}` }}
+            </view>
+            <view class="inbound-date">
+              {{ item.inboundDate || '-' }}
+            </view>
+          </view>
+
+          <!-- 数量信息 -->
+          <view class="quantity-row">
+            <view class="qty-block">
+              <view class="qty-label">
+                剩余库存
+              </view>
+              <view class="qty-value remaining">
+                {{ item.quantity }}
+                <text class="qty-unit">{{ getUnitLabel(item.unitValue) }}</text>
+              </view>
+            </view>
+            <view class="qty-divider" />
+            <view class="qty-block">
+              <view class="qty-label">
+                入库数量
+              </view>
+              <view class="qty-value">
+                {{ item.inboundQuantity }}
+                <text class="qty-unit">{{ getUnitLabel(item.unitValue) }}</text>
+              </view>
+            </view>
+            <view class="qty-divider" />
+            <view class="qty-block">
+              <view class="qty-label">
+                规格
+              </view>
+              <view class="qty-value">
+                {{ item.specValue || '-' }}
+              </view>
+            </view>
+          </view>
+
+          <!-- 详情信息 -->
+          <view class="detail-grid">
+            <view class="detail-item">
+              <text class="detail-label">版本</text>
+              <text class="detail-value">{{ item.versionName || '-' }}</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">仓库</text>
+              <text class="detail-value">{{ item.warehouseName || '-' }}</text>
+            </view>
+            <view class="detail-item">
+              <text class="detail-label">供应商</text>
+              <text class="detail-value">{{ item.supplierName || '-' }}</text>
+            </view>
+            <view v-if="item.note" class="detail-item full-width">
+              <text class="detail-label">备注</text>
+              <text class="detail-value">{{ item.note }}</text>
+            </view>
+          </view>
+
+          <!-- 操作按钮 -->
+          <view class="card-actions">
+            <view class="action-btn check-btn" @click.stop="handleStockCheck(item)">
+              库存盘点
+            </view>
+            <view class="action-btn record-btn" @click.stop="handleViewCuttingRecords(item)">
+              裁剪记录
+            </view>
+            <view class="action-btn print-btn" @click.stop="handlePrintLabel(item)">
+              打印标签
+            </view>
+          </view>
+        </view>
+
+        <view v-if="loadMoreState !== 'loading' && displayList.length === 0" class="py-100rpx text-center">
+          <wd-status-tip image="content" tip="暂无库存批次数据" />
+        </view>
+      </view>
+    </template>
 
     <!-- 盘点弹窗 -->
     <wd-popup
@@ -579,6 +626,59 @@ onMounted(() => {
 </template>
 
 <style lang="scss" scoped>
+.cancel-cut-area {
+  margin: 24rpx 24rpx 0;
+  background-color: #fff;
+  border-radius: 12rpx;
+  padding: 40rpx 32rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32rpx;
+}
+
+.cancel-cut-tip {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.cancel-cut-tip-icon {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  background-color: #52c41a;
+  color: #fff;
+  font-size: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cancel-cut-tip-text {
+  font-size: 30rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.cancel-cut-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 44rpx;
+  font-size: 30rpx;
+  font-weight: 500;
+  text-align: center;
+  color: #fff;
+  background-color: #ff4d4f;
+
+  &.loading {
+    background-color: #ffa39e;
+  }
+}
+
 .mat-info-card {
   background: linear-gradient(135deg, #1890ff, #096dd9);
   padding: 20rpx 24rpx;

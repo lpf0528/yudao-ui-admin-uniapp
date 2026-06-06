@@ -60,6 +60,7 @@ export interface SalesOrderMaterialDetail {
   amount: number
   note: string
   createTime: string
+  status: string
   elementName: string
   productName: string
   batchNo: string
@@ -130,6 +131,11 @@ export interface CutMaterialReq {
 /** 成品订单裁剪（绑定批次、记录裁剪数量、扣减批次库存） */
 export function cutMaterial(data: CutMaterialReq) {
   return httpPut<boolean>('/zc/sales-order/cut-material', data)
+}
+
+/** 撤销裁剪（回退批次库存、清空配料绑定、写入撤销裁剪记录） */
+export function cancelCutMaterial(materialId: number) {
+  return httpPut<boolean>('/zc/sales-order/cancel-cut-material', { materialId })
 }
 
 /** 创建销售订单 */
