@@ -346,14 +346,7 @@ onShow(loadDetail)
                         {{ mat.elementName || '-' }}
                       </view>
                     </view>
-                    <view class="material-item-row">
-                      <view class="material-item-label">
-                        产品
-                      </view>
-                      <view class="material-item-value">
-                        {{ mat.productName || '-' }}
-                      </view>
-                    </view>
+
                     <view class="material-item-row">
                       <view class="material-item-label">
                         用量
@@ -373,7 +366,15 @@ onShow(loadDetail)
                         {{ getMatStatusLabel(mat.status) }}
                       </view>
                     </view>
-                    <view v-if="mat.batchNo" class="material-item-row">
+                    <view class="material-item-row half-width">
+                      <view class="material-item-label">
+                        产品
+                      </view>
+                      <view class="material-item-value">
+                        {{ mat.productName || '-' }}
+                      </view>
+                    </view>
+                    <view v-if="mat.batchNo" class="material-item-row half-width">
                       <view class="material-item-label">
                         批次
                       </view>
@@ -657,10 +658,14 @@ onShow(loadDetail)
 }
 
 .material-item-row {
-  width: 33.333%;
+  width: 25%;
   display: flex;
   flex-direction: column;
   gap: 4rpx;
+
+  &.half-width {
+    width: 50%;
+  }
 
   &.full-width {
     width: 100%;
