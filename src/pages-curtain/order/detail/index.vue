@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
-import { onMounted, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import { ref } from 'vue'
 import { getSalesOrderDetail } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
@@ -49,13 +50,16 @@ function goInventory(mat: SalesOrderMaterialDetail) {
   })
 }
 
-onMounted(async () => {
+async function loadDetail() {
+  loading.value = true
   try {
     detail.value = await getSalesOrderDetail(Number(props.id))
   } finally {
     loading.value = false
   }
-})
+}
+
+onShow(loadDetail)
 </script>
 
 <template>

@@ -79,6 +79,8 @@ function handleBack() {
 }
 
 async function getList() {
+  if (!productId.value)
+    return
   loadMoreState.value = 'loading'
   try {
     const data = await getProductBatchPage({
@@ -215,7 +217,7 @@ async function handleCutSubmit() {
     })
     uni.showToast({ title: '裁剪成功', icon: 'success' })
     handleCloseCutPopup()
-    resetAndLoad()
+    navigateBackPlus()
   } catch {
     uni.showToast({ title: '裁剪失败，请重试', icon: 'none' })
   } finally {
@@ -257,7 +259,9 @@ async function handleCancelCut() {
       try {
         await cancelCutMaterial(matInfo.value.id)
         uni.showToast({ title: '撤销成功', icon: 'success' })
-        navigateBackPlus()
+        if (matInfo.value)
+          matInfo.value.status = ''
+        resetAndLoad()
       } catch {
         uni.showToast({ title: '撤销失败，请重试', icon: 'none' })
       } finally {
