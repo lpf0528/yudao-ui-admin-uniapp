@@ -46,7 +46,7 @@ function getUnitLabel(val: string) {
 
 function goCurtainDetail(curtainId: number) {
   uni.navigateTo({
-    url: `/pages-curtain/order/curtain-detail/index?orderId=${props.id}&curtainId=${curtainId}`,
+    url: `/pages-curtain/order/curtain-order-detail/curtain-item/index?orderId=${props.id}&curtainId=${curtainId}`,
   })
 }
 
