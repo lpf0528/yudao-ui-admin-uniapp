@@ -2,7 +2,7 @@
 import type { SalesOrderCurtainDetail } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { getSalesOrderDetail, packSalesOrderCurtain } from '@/api/curtain/order'
+import { getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -86,6 +86,7 @@ async function loadDetail() {
 }
 
 const packing = ref(false)
+const shipping = ref(false)
 
 async function handlePack() {
   uni.showModal({
@@ -103,6 +104,27 @@ async function handlePack() {
         uni.showToast({ title: '操作失败', icon: 'error' })
       } finally {
         packing.value = false
+      }
+    },
+  })
+}
+
+async function handleShip() {
+  uni.showModal({
+    title: '确认发货',
+    content: '确认将该窗帘标记为已发货？',
+    success: async (res) => {
+      if (!res.confirm)
+        return
+      shipping.value = true
+      try {
+        await shipSalesOrderCurtain(Number(props.curtainId))
+        uni.showToast({ title: '发货成功', icon: 'success' })
+        await loadDetail()
+      } catch {
+        uni.showToast({ title: '操作失败', icon: 'error' })
+      } finally {
+        shipping.value = false
       }
     },
   })
@@ -195,10 +217,13 @@ onShow(loadDetail)
         </view>
       </view>
 
-      <!-- 打包按钮 -->
-      <view class="mx-24rpx mb-8rpx flex justify-end rounded-12rpx bg-white px-24rpx py-20rpx shadow-[0_2rpx_8rpx_rgba(0,0,0,0.06)]">
+      <!-- 操作按钮 -->
+      <view class="mx-24rpx mb-8rpx flex justify-end gap-24rpx rounded-12rpx bg-white px-24rpx py-20rpx shadow-[0_2rpx_8rpx_rgba(0,0,0,0.06)]">
         <wd-button type="primary" custom-style="border-radius: 12rpx; font-size: 32rpx;" :loading="packing" @click="handlePack">
           打包
+        </wd-button>
+        <wd-button type="success" custom-style="border-radius: 12rpx; font-size: 32rpx;" :loading="shipping" @click="handleShip">
+          发货
         </wd-button>
       </view>
 

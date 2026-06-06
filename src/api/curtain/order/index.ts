@@ -148,6 +148,11 @@ export function packSalesOrderCurtain(id: number) {
   return httpPut<boolean>('/zc/sales-order-curtain/pack', undefined, { id })
 }
 
+/** 发货窗帘行（将窗帘行状态更新为已发货，并联动更新订单状态） */
+export function shipSalesOrderCurtain(id: number) {
+  return httpPut<boolean>('/zc/sales-order-curtain/ship', undefined, { id })
+}
+
 /** 创建销售订单 */
 // TODO: export function createSalesOrder(data: Partial<SalesOrder>) { return httpPost<number>('/admin-api/zc/sales-order/create', data) }
 
