@@ -6,6 +6,11 @@ export const MAT_STATUS = {
   HAVE_PEILIAO: 'HAVE_PEILIAO',
 } as const
 
+export const ZcOrderType = {
+  FABRIC: 'FABRIC',
+  CURTAIN: 'CURTAIN',
+} as const
+
 /** 销售订单 */
 export interface SalesOrder {
   id: number
@@ -163,6 +168,31 @@ export function cancelPackSalesOrderCurtain(id: number) {
 /** 撤销发货 */
 export function cancelShipSalesOrderCurtain(id: number) {
   return httpPut<boolean>('/zc/sales-order-curtain/cancel-ship', undefined, { id })
+}
+
+/** 面料单产品行 */
+export interface SalesOrderProductLine {
+  id: number
+  productId: number
+  productName: string
+  batchId: number
+  batchNo: string
+  quantity: number
+  price: number
+  amount: number
+  note: string
+  index: number
+  status: string
+}
+
+/** 面料单详情 */
+export interface SalesOrderProductDetail extends SalesOrder {
+  batchs: SalesOrderProductLine[]
+}
+
+/** 获取面料单详情（含产品批次行列表） */
+export function getSalesOrderProductDetail(id: number) {
+  return httpGet<SalesOrderProductDetail>('/zc/sales-order-product/detail', { id })
 }
 
 /** 创建销售订单 */

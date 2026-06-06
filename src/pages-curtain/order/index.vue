@@ -186,7 +186,7 @@ import type { LoadMoreState } from '@/http/types'
 import { onReachBottom } from '@dcloudio/uni-app'
 import { computed, onMounted, ref } from 'vue'
 import { getCustomerSimpleList } from '@/api/curtain/customer'
-import { getSalesOrderPage } from '@/api/curtain/order'
+import { getSalesOrderPage, ZcOrderType } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -315,7 +315,11 @@ function handleAdd() {
 }
 
 function handleDetail(item: SalesOrder) {
-  uni.navigateTo({ url: `/pages-curtain/order/detail/index?id=${item.id}` })
+  if (item.types === ZcOrderType.FABRIC) {
+    uni.navigateTo({ url: `/pages-curtain/order/fabric-detail/index?id=${item.id}` })
+  } else {
+    uni.navigateTo({ url: `/pages-curtain/order/curtain-detail/index?id=${item.id}` })
+  }
 }
 
 onReachBottom(() => { loadMore() })
