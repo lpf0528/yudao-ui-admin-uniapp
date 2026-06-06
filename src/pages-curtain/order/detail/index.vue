@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SalesOrderDetail } from '@/api/curtain/order'
+import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import { onMounted, ref } from 'vue'
 import { getSalesOrderDetail } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
@@ -33,6 +33,12 @@ function getTypeLabel(val: string) {
 
 function getUnitLabel(val: string) {
   return dictStore.getDictData('zc_product_unit', val)?.label ?? val ?? '-'
+}
+
+function goInventory(mat: SalesOrderMaterialDetail) {
+  uni.navigateTo({
+    url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify(mat))}`,
+  })
 }
 
 onMounted(async () => {
@@ -80,6 +86,16 @@ onMounted(async () => {
             {{ detail.orderDate || '-' }}
           </view>
         </view>
+      </view>
+
+      <!-- 操作卡片 -->
+      <view class="action-card">
+        <wd-button type="primary" size="medium" @click="() => {}">
+          发货
+        </wd-button>
+        <wd-button type="info" size="medium" plain @click="() => {}">
+          打印发货联
+        </wd-button>
       </view>
 
       <!-- 基本信息 -->
@@ -217,42 +233,49 @@ onMounted(async () => {
               </view>
             </view>
 
-            <!-- 用料明细表头 -->
-            <view v-if="structure.materials?.length" class="material-table">
-              <view class="material-thead">
-                <view class="col-element">
-                  组件
-                </view>
-                <view class="col-product">
-                  产品
-                </view>
-                <view class="col-batch">
-                  批次
-                </view>
-                <view class="col-qty">
-                  用量
-                </view>
-              </view>
+            <!-- 用料明细列表 -->
+            <view v-if="structure.materials?.length" class="material-list">
               <view
                 v-for="mat in structure.materials"
                 :key="mat.id"
-                class="material-row"
+                class="material-item"
+                @click="goInventory(mat)"
               >
-                <view class="col-element">
-                  {{ mat.elementName || '-' }}
+                <view class="material-item-row">
+                  <view class="material-item-label">
+                    组件
+                  </view>
+                  <view class="material-item-value">
+                    {{ mat.elementName || '-' }}
+                  </view>
                 </view>
-                <view class="col-product">
-                  {{ mat.productName || '-' }}
+                <view class="material-item-row">
+                  <view class="material-item-label">
+                    产品
+                  </view>
+                  <view class="material-item-value">
+                    {{ mat.productName || '-' }}
+                  </view>
                 </view>
-                <view class="col-batch">
-                  {{ mat.batchNo || '-' }}
+                <view class="material-item-row">
+                  <view class="material-item-label">
+                    用量
+                  </view>
+                  <view class="material-item-value">
+                    {{ mat.quantity }}{{ getUnitLabel(mat.unitValue) }}
+                  </view>
                 </view>
-                <view class="col-qty">
-                  {{ mat.quantity }}{{ getUnitLabel(mat.unitValue) }}
+                <view class="material-item-row">
+                  <view class="material-item-label">
+                    状态
+                  </view>
+                  <view class="material-item-value material-item-value--pending">
+                    未配料
+                  </view>
                 </view>
               </view>
             </view>
-            <view v-else class="py-16rpx pl-16rpx text-24rpx text-[#bbb]">
+            <view v-else class="py-16rpx pl-16rpx text-28rpx text-[#bbb]">
               暂无用料
             </view>
           </view>
@@ -408,40 +431,42 @@ onMounted(async () => {
   margin-bottom: 12rpx;
 }
 
-.material-table {
-  border: 1rpx solid #eee;
-  border-radius: 6rpx;
-  overflow: hidden;
+.material-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.material-item {
+  background-color: #f5f7fa;
+  border-radius: 8rpx;
+  padding: 16rpx 20rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx 0;
+  cursor: pointer;
+}
+
+.material-item-row {
+  width: 33.333%;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.material-item-label {
   font-size: 24rpx;
+  color: #999;
 }
 
-.material-thead {
-  display: flex;
-  background-color: #f0f5ff;
-  color: #555;
-  font-weight: 500;
-  padding: 10rpx 12rpx;
-}
-
-.material-row {
-  display: flex;
-  padding: 10rpx 12rpx;
+.material-item-value {
+  font-size: 28rpx;
   color: #333;
-  border-top: 1rpx solid #f0f0f0;
-}
+  word-break: break-all;
 
-.col-element {
-  flex: 2;
-}
-.col-product {
-  flex: 3;
-}
-.col-batch {
-  flex: 4;
-}
-.col-qty {
-  flex: 1;
-  text-align: right;
+  &--pending {
+    color: #faad14;
+  }
 }
 
 .status-warning {
@@ -467,5 +492,16 @@ onMounted(async () => {
 .status-default {
   background-color: #f5f5f5;
   color: #999;
+}
+
+.action-card {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+  background-color: #fff;
+  margin: 0 24rpx 16rpx;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
 }
 </style>

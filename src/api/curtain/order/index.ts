@@ -1,5 +1,5 @@
 import type { PageResult } from '@/http/types'
-import { httpGet } from '@/http/http'
+import { httpGet, httpPut } from '@/http/http'
 
 /** 销售订单 */
 export interface SalesOrder {
@@ -63,6 +63,7 @@ export interface SalesOrderMaterialDetail {
   elementName: string
   productName: string
   batchNo: string
+  barcode: string
 }
 
 /** 结构行详情 */
@@ -117,6 +118,18 @@ export interface SalesOrderDetail extends SalesOrder {
 /** 获取销售订单完整详情 */
 export function getSalesOrderDetail(id: number) {
   return httpGet<SalesOrderDetail>('/zc/sales-order/detail', { id })
+}
+
+/** 成品订单裁剪请求 */
+export interface CutMaterialReq {
+  id: number
+  batchId: number
+  cutQuantity: number
+}
+
+/** 成品订单裁剪（绑定批次、记录裁剪数量、扣减批次库存） */
+export function cutMaterial(data: CutMaterialReq) {
+  return httpPut<boolean>('/zc/sales-order/cut-material', data)
 }
 
 /** 创建销售订单 */
