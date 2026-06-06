@@ -44,6 +44,12 @@ function getUnitLabel(val: string) {
   return dictStore.getDictData('zc_product_unit', val)?.label ?? val ?? '-'
 }
 
+function goCurtainDetail(curtainId: number) {
+  uni.navigateTo({
+    url: `/pages-curtain/order/curtain-detail/index?orderId=${props.id}&curtainId=${curtainId}`,
+  })
+}
+
 function goInventory(mat: SalesOrderMaterialDetail) {
   uni.navigateTo({
     url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify(mat))}`,
@@ -221,12 +227,19 @@ onShow(loadDetail)
               <view class="curtain-index">
                 {{ idx + 1 }}
               </view>
-              <view class="text-28rpx text-[#333] font-medium">
+              <view class="text-34rpx text-[#333] font-medium">
                 {{ curtain.curtainName || '-' }}
               </view>
             </view>
-            <view class="text-24rpx text-[#999]">
-              {{ curtain.room || '-' }}
+            <view class="flex items-center gap-12rpx">
+              <view class="curtain-status-badge" :class="`status-${getStatusColorType(curtain.status)}`">
+                {{ getStatusLabel(curtain.status) }}
+              </view>
+            </view>
+            <view class="flex items-center gap-12rpx">
+              <view class="curtain-detail-btn" @click.stop="goCurtainDetail(curtain.id)">
+                详情>
+              </view>
             </view>
           </view>
 
@@ -410,6 +423,25 @@ onShow(loadDetail)
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12rpx;
+  background-color: #e6f4ff;
+  border-radius: 8rpx;
+  padding: 10rpx 12rpx;
+}
+
+.curtain-detail-btn {
+  padding: 4rpx 16rpx;
+  border-radius: 4rpx;
+  font-size: 24rpx;
+  color: #1890ff;
+  border: 1rpx solid #1890ff;
+  background-color: #fff;
+}
+
+.curtain-status-badge {
+  padding: 4rpx 14rpx;
+  border-radius: 4rpx;
+  font-size: 24rpx;
+  font-weight: 500;
 }
 
 .curtain-index {
