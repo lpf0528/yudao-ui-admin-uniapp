@@ -281,7 +281,7 @@ onShow(loadDetail)
                   <view class="material-item-label">
                     状态
                   </view>
-                  <view class="material-item-value" :class="`material-status-${getMatStatusColorType(mat.status)}`">
+                  <view class="material-item-value" :class="getMatStatusColorType(mat.status) ? `material-status-${getMatStatusColorType(mat.status)}` : ''">
                     {{ getMatStatusLabel(mat.status) }}
                   </view>
                 </view>

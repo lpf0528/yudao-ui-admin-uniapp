@@ -1,6 +1,11 @@
 import type { PageResult } from '@/http/types'
 import { httpGet, httpPut } from '@/http/http'
 
+export const MAT_STATUS = {
+  NOT_PEILIAO: 'NOT_PEILIAO',
+  HAVE_PEILIAO: 'HAVE_PEILIAO',
+} as const
+
 /** 销售订单 */
 export interface SalesOrder {
   id: number

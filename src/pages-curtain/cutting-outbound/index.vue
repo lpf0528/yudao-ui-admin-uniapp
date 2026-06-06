@@ -5,7 +5,7 @@ import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
 import { computed, onMounted, ref } from 'vue'
 import { createInventoryRecord } from '@/api/curtain/inventory-record'
-import { cancelCutMaterial, cutMaterial } from '@/api/curtain/order'
+import { cancelCutMaterial, cutMaterial, MAT_STATUS } from '@/api/curtain/order'
 import { getProductBatchPage } from '@/api/curtain/product'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
@@ -63,7 +63,7 @@ const displayList = computed(() => {
 
   return result
 })
-const isCut = computed(() => matInfo.value?.status === 'HAVE_PEILIAO')
+const isCut = computed(() => matInfo.value?.status === MAT_STATUS.HAVE_PEILIAO)
 
 const loadMoreState = ref<LoadMoreState>('loading')
 const queryParams = ref({ pageNo: 1, pageSize: 199 })
@@ -260,7 +260,7 @@ async function handleCancelCut() {
         await cancelCutMaterial(matInfo.value.id)
         uni.showToast({ title: '撤销成功', icon: 'success' })
         if (matInfo.value)
-          matInfo.value.status = ''
+          matInfo.value.status = MAT_STATUS.NOT_PEILIAO
         resetAndLoad()
       } catch {
         uni.showToast({ title: '撤销失败，请重试', icon: 'none' })
