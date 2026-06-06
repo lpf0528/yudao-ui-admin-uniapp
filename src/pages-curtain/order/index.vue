@@ -318,7 +318,7 @@ function handleDetail(item: SalesOrder) {
   if (item.types === ZcOrderType.FABRIC) {
     uni.navigateTo({ url: `/pages-curtain/order/fabric-detail/index?id=${item.id}` })
   } else {
-    uni.navigateTo({ url: `/pages-curtain/order/curtain-detail/index?id=${item.id}` })
+    uni.navigateTo({ url: `/pages-curtain/order/curtain-order-detail/index?id=${item.id}` })
   }
 }
 
