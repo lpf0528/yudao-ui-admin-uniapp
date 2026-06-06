@@ -220,6 +220,13 @@ async function handleCutSubmit() {
   }
 }
 
+function handleViewCuttingRecords(item: ZcProductBatch) {
+  const enc = encodeURIComponent
+  uni.navigateTo({
+    url: `/pages-curtain/cutting-outbound/cutting-records/index?batchId=${item.id}&batchNo=${enc(item.batchNo || String(item.id))}`,
+  })
+}
+
 function handlePrintLabel(item: ZcProductBatch) {
   const enc = encodeURIComponent
   const query = `batchId=${item.id}`
@@ -418,6 +425,9 @@ onMounted(() => {
         <view class="card-actions">
           <view class="action-btn check-btn" @click.stop="handleStockCheck(item)">
             库存盘点
+          </view>
+          <view class="action-btn record-btn" @click.stop="handleViewCuttingRecords(item)">
+            裁剪记录
           </view>
           <view class="action-btn print-btn" @click.stop="handlePrintLabel(item)">
             打印标签
@@ -840,6 +850,12 @@ onMounted(() => {
   color: #1890ff;
   border: 1rpx solid #1890ff;
   background-color: #e6f7ff;
+}
+
+.record-btn {
+  color: #722ed1;
+  border: 1rpx solid #722ed1;
+  background-color: #f9f0ff;
 }
 
 .print-btn {
