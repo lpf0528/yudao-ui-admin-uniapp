@@ -2,7 +2,7 @@
 import type { SalesOrderCurtainDetail, SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { cancelPackSalesOrderCurtain, cancelShipSalesOrderCurtain, getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain, ZcOrderType } from '@/api/curtain/order'
+import { cancelPackSalesOrderCurtain, cancelShipSalesOrderCurtain, completeSalesOrder, getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain, ZcOrderStatus, ZcOrderType } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -108,6 +108,27 @@ async function handleShip(curtain: SalesOrderCurtainDetail) {
       }
     },
   )
+}
+
+const completing = ref(false)
+
+async function handleComplete() {
+  uni.showModal({
+    title: '确认完成',
+    content: '订单标记完成后，将不会显示。',
+    success: async (res) => {
+      if (!res.confirm)
+        return
+      completing.value = true
+      try {
+        await completeSalesOrder(Number(props.id))
+        uni.showToast({ title: '订单已完成', icon: 'success' })
+        await loadDetail()
+      } catch {} finally {
+        completing.value = false
+      }
+    },
+  })
 }
 
 const showPrintPopup = ref(false)
@@ -280,9 +301,18 @@ onShow(loadDetail)
       </view>
 
       <!-- 窗帘明细操作区 -->
-      <view class="mx-24rpx mb-0 flex items-center justify-end rounded-t-12rpx bg-white px-24rpx py-16rpx">
+      <view class="mx-24rpx mb-0 flex items-center justify-end gap-16rpx rounded-t-12rpx bg-white px-24rpx py-16rpx">
         <wd-button type="info" size="small" @click="openPrintPopup">
           打印发货联
+        </wd-button>
+        <wd-button
+          type="success"
+          size="small"
+          :loading="completing"
+          :disabled="detail.status === ZcOrderStatus.UNCONFIRMED || detail.status === ZcOrderStatus.COMPLETE"
+          @click="handleComplete"
+        >
+          完成
         </wd-button>
       </view>
 

@@ -6,6 +6,20 @@ export const MAT_STATUS = {
   HAVE_PEILIAO: 'HAVE_PEILIAO',
 } as const
 
+export const ZcOrderStatus = {
+  UNCONFIRMED: 'UNCONFIRMED',
+  CONFIRMED: 'CONFIRMED',
+  NOT_PEILIAO: 'NOT_PEILIAO',
+  HAVE_PEILIAO: 'HAVE_PEILIAO',
+  BUFEN_DABAO: 'BUFEN_DABAO',
+  DABAO: 'DABAO',
+  BUFEN_FAHUO: 'BUFEN_FAHUO',
+  FAHUO: 'FAHUO',
+  COMPLETE: 'COMPLETE',
+} as const
+
+export type ZcOrderStatusType = typeof ZcOrderStatus[keyof typeof ZcOrderStatus]
+
 export const ZcOrderType = {
   FABRIC: 'FABRIC',
   CURTAIN: 'CURTAIN',
@@ -221,6 +235,11 @@ export interface SalesOrderProductDetail extends SalesOrder {
 /** 获取面料单详情（含产品批次行列表） */
 export function getSalesOrderProductDetail(id: number) {
   return httpGet<SalesOrderProductDetail>('/zc/sales-order-product/detail', { id })
+}
+
+/** 完成销售订单（订单不是 UNCONFIRMED 时均可调用） */
+export function completeSalesOrder(id: number) {
+  return httpPut<boolean>('/zc/sales-order/complete', undefined, { id })
 }
 
 /** 创建销售订单 */
