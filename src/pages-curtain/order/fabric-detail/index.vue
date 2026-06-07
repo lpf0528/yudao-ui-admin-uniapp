@@ -2,7 +2,7 @@
 import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
-import { cancelShipSalesOrderCurtain, completeSalesOrder, getSalesOrderDetail, shipSalesOrderCurtain, ZcOrderStatus, ZcOrderType } from '@/api/curtain/order'
+import { cancelShipSalesOrderCurtain, completeSalesOrder, getSalesOrderDetail, shipSalesOrderCurtain, ZcOrderStatus } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -10,6 +10,7 @@ interface FabricMaterialRow extends SalesOrderMaterialDetail {
   curtainId: number
   curtainIndex: number
   curtainShipTime: string | null
+  curtainStatus: string
 }
 
 const props = defineProps<{ id: string }>()
@@ -33,6 +34,7 @@ const materials = computed<FabricMaterialRow[]>(() =>
       curtainId: curtain.id,
       curtainIndex: curtain.index ?? 0,
       curtainShipTime: curtain.shipTime ?? null,
+      curtainStatus: curtain.status ?? '',
     }]
   }),
 )
@@ -140,7 +142,6 @@ function goInventory(line: FabricMaterialRow) {
     quantity: line.quantity,
     unitValue: '',
     status: line.status,
-    orderType: ZcOrderType.FABRIC,
   }
   uni.navigateTo({
     url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify(mat))}`,
@@ -337,8 +338,8 @@ onShow(loadDetail)
             <view class="text-30rpx text-[#333] font-medium">
               {{ line.productName || '-' }}
             </view>
-            <view class="batch-status" :class="`status-${getStatusColorType(line.status)}`">
-              {{ getStatusLabel(line.status) }}
+            <view class="batch-status" :class="`status-${getStatusColorType(line.curtainStatus)}`">
+              {{ getStatusLabel(line.curtainStatus) }}
             </view>
           </view>
           <view class="batch-body">
@@ -435,8 +436,8 @@ onShow(loadDetail)
             <view class="min-w-0 flex-1 truncate text-28rpx text-[#333]">
               {{ line.productName || '-' }}
             </view>
-            <view class="batch-status flex-shrink-0" :class="`status-${getStatusColorType(line.status)}`">
-              {{ getStatusLabel(line.status) }}
+            <view class="batch-status flex-shrink-0" :class="`status-${getStatusColorType(line.curtainStatus)}`">
+              {{ getStatusLabel(line.curtainStatus) }}
             </view>
           </view>
         </scroll-view>
