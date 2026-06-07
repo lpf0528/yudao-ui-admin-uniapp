@@ -161,6 +161,11 @@ export function cancelCutMaterial(materialId: number) {
   return httpPut<boolean>('/zc/sales-order/cancel-cut', { materialId })
 }
 
+/** 撤销面料单产品行裁剪（回退批次库存、清空裁剪数量、写入撤销裁剪记录） */
+export function cancelCutFabricProduct(id: number) {
+  return httpPut<boolean>('/zc/sales-order-product/cancel-cut', { id })
+}
+
 /** 打包窗帘行（将窗帘行状态更新为已打包，并联动更新订单状态） */
 export function packSalesOrderCurtain(id: number) {
   return httpPut<boolean>('/zc/sales-order-curtain/pack', undefined, { id })

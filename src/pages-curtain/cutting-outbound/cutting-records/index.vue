@@ -9,11 +9,11 @@ import { navigateBackPlus } from '@/utils'
 const dictStore = useDictStore()
 
 function getOperateLabel(val: string) {
-  return dictStore.getDictData('zc_inventory_operate', val)?.label ?? val ?? '-'
+  return dictStore.getDictData('zc_inventory_record_operate', val)?.label ?? val ?? '-'
 }
 
 function getOperateColorType(val: string) {
-  return dictStore.getDictData('zc_inventory_operate', val)?.colorType ?? 'default'
+  return dictStore.getDictData('zc_inventory_record_operate', val)?.colorType ?? 'default'
 }
 
 definePage({
@@ -98,7 +98,7 @@ onMounted(() => {
         class="record-card"
       >
         <view class="card-header">
-          <wd-tag :type="getOperateColorType(item.operate)">
+          <wd-tag>
             {{ getOperateLabel(item.operate) }}
           </wd-tag>
           <view class="create-time">

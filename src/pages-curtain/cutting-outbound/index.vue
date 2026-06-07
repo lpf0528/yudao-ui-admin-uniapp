@@ -5,7 +5,7 @@ import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
 import { computed, onMounted, ref } from 'vue'
 import { createInventoryRecord } from '@/api/curtain/inventory-record'
-import { cancelCutMaterial, cutFabricProduct, cutMaterial, MAT_STATUS, ZcOrderType } from '@/api/curtain/order'
+import { cancelCutFabricProduct, cancelCutMaterial, cutFabricProduct, cutMaterial, MAT_STATUS, ZcOrderType } from '@/api/curtain/order'
 import { getProductBatchPage } from '@/api/curtain/product'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
@@ -265,7 +265,11 @@ async function handleCancelCut() {
         return
       cancelSubmitting.value = true
       try {
-        await cancelCutMaterial(matInfo.value.id)
+        if (matInfo.value.orderType === ZcOrderType.FABRIC) {
+          await cancelCutFabricProduct(matInfo.value.id)
+        } else {
+          await cancelCutMaterial(matInfo.value.id)
+        }
         uni.showToast({ title: '撤销成功', icon: 'success' })
         if (matInfo.value)
           matInfo.value.status = MAT_STATUS.NOT_PEILIAO
