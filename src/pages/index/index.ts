@@ -39,7 +39,7 @@ const menuGroupsData: MenuGroup[] = [
         permission: 'system:user:list',
       },
       {
-        key: 'productInbound',
+        key: 'inbound',
         name: '产品入库',
         icon: 'add-circle',
         url: '/pages-curtain/product-inbound/index',
@@ -47,10 +47,10 @@ const menuGroupsData: MenuGroup[] = [
         permission: 'system:user:list',
       },
       {
-        key: 'crop',
-        name: '库存管理',
+        key: 'process_node',
+        name: '工序操作',
         icon: 'user',
-        url: '/pages-system/user/index',
+        url: '/pages-curtain/process-node/index',
         iconColor: '#1890ff',
         permission: 'system:user:list',
       },

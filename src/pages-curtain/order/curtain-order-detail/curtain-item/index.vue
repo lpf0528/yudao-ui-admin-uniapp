@@ -90,7 +90,7 @@ function formatTime(val: string) {
 async function loadDetail() {
   loading.value = true
   try {
-    const detail = await getSalesOrderDetail(Number(props.orderId))
+    const detail = await getSalesOrderDetail({ id: Number(props.orderId) })
     const idx = detail.curtains?.findIndex(c => c.id === Number(props.curtainId)) ?? -1
     curtain.value = detail.curtains?.[idx]
     curtainIndex.value = idx + 1

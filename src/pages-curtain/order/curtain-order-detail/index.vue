@@ -161,7 +161,7 @@ function goInventory(mat: SalesOrderMaterialDetail) {
 async function loadDetail() {
   loading.value = true
   try {
-    detail.value = await getSalesOrderDetail(Number(props.id))
+    detail.value = await getSalesOrderDetail({ id: Number(props.id) })
   } finally {
     loading.value = false
   }

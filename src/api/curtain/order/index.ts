@@ -130,6 +130,8 @@ export interface SalesOrderCurtainDetail {
   mountings: string
   note: string
   pleatsDistance: number
+  status: string
+  index: number
   createTime: string
   curtainName: string
   packTime: string | null
@@ -142,9 +144,9 @@ export interface SalesOrderDetail extends SalesOrder {
   curtains: SalesOrderCurtainDetail[]
 }
 
-/** 获取销售订单完整详情 */
-export function getSalesOrderDetail(id: number) {
-  return httpGet<SalesOrderDetail>('/zc/sales-order/detail', { id })
+/** 获取销售订单完整详情（id 与 orderNo 二选一，orderNo 优先） */
+export function getSalesOrderDetail(params: { id?: number, orderNo?: string }) {
+  return httpGet<SalesOrderDetail>('/zc/sales-order/detail', params as Record<string, any>)
 }
 
 /** 成品订单裁剪请求 */
