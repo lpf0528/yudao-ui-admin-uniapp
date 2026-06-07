@@ -2,7 +2,7 @@
 import type { SalesOrderProductDetail, SalesOrderProductLine } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { getSalesOrderProductDetail, ZcOrderType } from '@/api/curtain/order'
+import { cancelShipFabricProduct, getSalesOrderProductDetail, shipFabricProduct, ZcOrderType } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -18,7 +18,41 @@ definePage({
 const loading = ref(true)
 const detail = ref<SalesOrderProductDetail>()
 const infoExpanded = ref(false)
+const shippingId = ref<number | null>(null)
 const dictStore = useDictStore()
+
+function confirmAction(title: string, content: string, onConfirm: () => Promise<void>) {
+  uni.showModal({
+    title,
+    content,
+    success: async (res) => {
+      if (res.confirm)
+        await onConfirm()
+    },
+  })
+}
+
+function handleShip(line: SalesOrderProductLine) {
+  const isShipped = !!line.shipTime
+  confirmAction(
+    isShipped ? '确认撤销发货' : '确认发货',
+    isShipped ? `确认撤销"${line.productName}"的发货状态？` : `确认将"${line.productName}"标记为已发货？`,
+    async () => {
+      shippingId.value = line.id
+      try {
+        if (isShipped) {
+          await cancelShipFabricProduct(line.id)
+        } else {
+          await shipFabricProduct(line.id)
+        }
+        uni.showToast({ title: isShipped ? '撤销发货成功' : '发货成功', icon: 'success' })
+        await loadDetail()
+      } catch {} finally {
+        shippingId.value = null
+      }
+    },
+  )
+}
 
 function getStatusLabel(val: string) {
   return dictStore.getDictData('zc_order_status', val)?.label ?? val ?? '-'
@@ -249,6 +283,14 @@ onShow(loadDetail)
                 {{ line.quantity }}
               </view>
             </view>
+            <view class="batch-row">
+              <view class="batch-label">
+                裁剪状态
+              </view>
+              <view class="batch-value" :class="line.cutQuantity ? 'cut-done' : 'cut-pending'">
+                {{ line.cutQuantity ? '已裁剪' : '未裁剪' }}
+              </view>
+            </view>
             <view class="batch-row full-width">
               <view class="batch-label">
                 备注
@@ -258,15 +300,23 @@ onShow(loadDetail)
               </view>
             </view>
           </view>
-        </view>
-
-        <!-- 合计 -->
-        <view v-if="detail.batchs?.length" class="total-row">
-          <view class="text-28rpx text-[#666]">
-            合计金额
-          </view>
-          <view class="text-32rpx text-[#1890ff] font-semibold">
-            ¥{{ detail.amount ?? 0 }}
+          <view class="batch-footer">
+            <wd-button
+              type="info"
+              size="small"
+              plain
+              @click.stop="() => {}"
+            >
+              打印发货联
+            </wd-button>
+            <wd-button
+              :type="line.shipTime ? 'warning' : 'success'"
+              size="small"
+              :loading="shippingId === line.id"
+              @click.stop="handleShip(line)"
+            >
+              {{ line.shipTime ? '撤销发货' : '发货' }}
+            </wd-button>
           </view>
         </view>
       </view>
@@ -370,6 +420,15 @@ onShow(loadDetail)
   color: #333;
 }
 
+.batch-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+  padding: 12rpx 16rpx;
+  border-top: 1rpx solid #f0f0f0;
+  background-color: #fafafa;
+}
+
 .batch-item {
   border: 1rpx solid #f0f0f0;
   border-radius: 10rpx;
@@ -418,7 +477,7 @@ onShow(loadDetail)
 }
 
 .batch-row {
-  width: 50%;
+  width: 33.3333%;
   display: flex;
   flex-direction: column;
   gap: 4rpx;
@@ -436,6 +495,14 @@ onShow(loadDetail)
 .batch-value {
   font-size: 28rpx;
   color: #333;
+}
+
+.cut-done {
+  color: #52c41a;
+}
+
+.cut-pending {
+  color: #faad14;
 }
 
 .total-row {

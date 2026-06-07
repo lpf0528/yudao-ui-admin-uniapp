@@ -199,6 +199,18 @@ export interface SalesOrderProductLine {
   note: string
   index: number
   status: string
+  cutQuantity: number | null
+  shipTime: string | null
+}
+
+/** 面料单产品行发货（标记已发货、记录发货时间、联动更新订单状态） */
+export function shipFabricProduct(id: number) {
+  return httpPut<boolean>('/zc/sales-order-product/ship', { id })
+}
+
+/** 撤销面料单产品行发货（回退发货状态、清空发货时间、联动更新订单状态） */
+export function cancelShipFabricProduct(id: number) {
+  return httpPut<boolean>('/zc/sales-order-product/cancel-ship', { id })
 }
 
 /** 面料单详情 */
