@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { SalesOrderProductDetail } from '@/api/curtain/order'
+import type { SalesOrderProductDetail, SalesOrderProductLine } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { getSalesOrderProductDetail } from '@/api/curtain/order'
+import { getSalesOrderProductDetail, ZcOrderType } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -34,6 +34,24 @@ function getBatchStatusLabel(val: string) {
 
 function getBatchStatusColorType(val: string) {
   return dictStore.getDictData('zc_order_batch_status', val)?.colorType ?? 'default'
+}
+
+function goInventory(line: SalesOrderProductLine) {
+  const mat = {
+    id: line.id,
+    productId: line.productId,
+    productName: line.productName,
+    batchId: line.batchId,
+    batchNo: line.batchNo,
+    elementName: '面料',
+    quantity: line.quantity,
+    unitValue: '',
+    status: line.status,
+    orderType: ZcOrderType.FABRIC,
+  }
+  uni.navigateTo({
+    url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify(mat))}`,
+  })
 }
 
 async function loadDetail() {
@@ -201,6 +219,7 @@ onShow(loadDetail)
           v-for="line in detail.batchs"
           :key="line.id"
           class="batch-item"
+          @click="goInventory(line)"
         >
           <view class="batch-header">
             <view class="batch-index">
@@ -209,8 +228,8 @@ onShow(loadDetail)
             <view class="text-30rpx text-[#333] font-medium">
               {{ line.productName || '-' }}
             </view>
-            <view class="batch-status" :class="`status-${getBatchStatusColorType(line.status)}`">
-              {{ getBatchStatusLabel(line.status) }}
+            <view class="batch-status" :class="`status-${getStatusColorType(line.status)}`">
+              {{ getStatusLabel(line.status) }}
             </view>
           </view>
           <view class="batch-body">
@@ -230,28 +249,12 @@ onShow(loadDetail)
                 {{ line.quantity }}
               </view>
             </view>
-            <view class="batch-row">
-              <view class="batch-label">
-                单价
-              </view>
-              <view class="batch-value">
-                ¥{{ line.price }}
-              </view>
-            </view>
-            <view class="batch-row">
-              <view class="batch-label">
-                小计
-              </view>
-              <view class="batch-value text-[#1890ff] font-medium">
-                ¥{{ line.amount }}
-              </view>
-            </view>
-            <view v-if="line.note" class="batch-row full-width">
+            <view class="batch-row full-width">
               <view class="batch-label">
                 备注
               </view>
               <view class="batch-value">
-                {{ line.note }}
+                {{ line.note || '-' }}
               </view>
             </view>
           </view>

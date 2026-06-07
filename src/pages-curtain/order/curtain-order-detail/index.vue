@@ -2,7 +2,7 @@
 import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { getSalesOrderDetail } from '@/api/curtain/order'
+import { getSalesOrderDetail, ZcOrderType } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -52,7 +52,7 @@ function goCurtainDetail(curtainId: number) {
 
 function goInventory(mat: SalesOrderMaterialDetail) {
   uni.navigateTo({
-    url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify(mat))}`,
+    url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify({ ...mat, orderType: ZcOrderType.CURTAIN }))}`,
   })
 }
 

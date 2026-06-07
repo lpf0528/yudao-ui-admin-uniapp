@@ -5,7 +5,7 @@ import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
 import { computed, onMounted, ref } from 'vue'
 import { createInventoryRecord } from '@/api/curtain/inventory-record'
-import { cancelCutMaterial, cutMaterial, MAT_STATUS } from '@/api/curtain/order'
+import { cancelCutMaterial, cutFabricProduct, cutMaterial, MAT_STATUS, ZcOrderType } from '@/api/curtain/order'
 import { getProductBatchPage } from '@/api/curtain/product'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
@@ -35,6 +35,7 @@ interface MatInfo {
   quantity: number
   unitValue: string
   status?: string
+  orderType?: string
 }
 
 const matInfo = ref<MatInfo | null>(null)
@@ -210,16 +211,23 @@ async function handleCutSubmit() {
   }
   cutSubmitting.value = true
   try {
-    await cutMaterial({
-      id: matInfo.value.id,
-      batchId: cutBatch.value.id,
-      cutQuantity: cutQuantity.value,
-    })
+    if (matInfo.value.orderType === ZcOrderType.FABRIC) {
+      await cutFabricProduct({
+        id: matInfo.value.id,
+        cutQuantity: cutQuantity.value,
+      })
+    } else {
+      await cutMaterial({
+        id: matInfo.value.id,
+        batchId: cutBatch.value.id,
+        cutQuantity: cutQuantity.value,
+      })
+    }
     uni.showToast({ title: '裁剪成功', icon: 'success' })
     handleCloseCutPopup()
     navigateBackPlus()
   } catch {
-    uni.showToast({ title: '裁剪失败，请重试', icon: 'none' })
+    // HTTP 层已自动展示后端错误信息
   } finally {
     cutSubmitting.value = false
   }

@@ -142,12 +142,23 @@ export interface CutMaterialReq {
 
 /** 成品订单裁剪（绑定批次、记录裁剪数量、扣减批次库存） */
 export function cutMaterial(data: CutMaterialReq) {
-  return httpPut<boolean>('/zc/sales-order/cut-material', data)
+  return httpPut<boolean>('/zc/sales-order/cut', data)
+}
+
+/** 面料单产品行裁剪请求 */
+export interface CutFabricProductReq {
+  id: number
+  cutQuantity: number
+}
+
+/** 面料单产品行裁剪（扣减批次库存、记录裁剪数量、更新配料状态） */
+export function cutFabricProduct(data: CutFabricProductReq) {
+  return httpPut<boolean>('/zc/sales-order-product/cut', data)
 }
 
 /** 撤销裁剪（回退批次库存、清空配料绑定、写入撤销裁剪记录） */
 export function cancelCutMaterial(materialId: number) {
-  return httpPut<boolean>('/zc/sales-order/cancel-cut-material', { materialId })
+  return httpPut<boolean>('/zc/sales-order/cancel-cut', { materialId })
 }
 
 /** 打包窗帘行（将窗帘行状态更新为已打包，并联动更新订单状态） */
