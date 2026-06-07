@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
+import type { SalesOrderCurtainDetail, SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { getSalesOrderDetail, ZcOrderType } from '@/api/curtain/order'
+import { cancelPackSalesOrderCurtain, cancelShipSalesOrderCurtain, getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain, ZcOrderType } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -48,6 +48,66 @@ function goCurtainDetail(curtainId: number) {
   uni.navigateTo({
     url: `/pages-curtain/order/curtain-order-detail/curtain-item/index?orderId=${props.id}&curtainId=${curtainId}`,
   })
+}
+
+const packingId = ref<number | null>(null)
+const shippingId = ref<number | null>(null)
+
+function confirmAction(title: string, content: string, onConfirm: () => Promise<void>) {
+  uni.showModal({
+    title,
+    content,
+    success: async (res) => {
+      if (res.confirm)
+        await onConfirm()
+    },
+  })
+}
+
+async function handlePack(curtain: SalesOrderCurtainDetail) {
+  const isPacked = !!curtain.packTime
+  confirmAction(
+    isPacked ? '确认撤销打包' : '确认打包',
+    isPacked ? '确认撤销该窗帘的打包状态？' : '确认将该窗帘标记为已打包？',
+    async () => {
+      packingId.value = curtain.id
+      try {
+        if (isPacked) {
+          await cancelPackSalesOrderCurtain(curtain.id)
+          uni.showToast({ title: '撤销打包成功', icon: 'success' })
+        } else {
+          await packSalesOrderCurtain(curtain.id)
+          uni.showToast({ title: '打包成功', icon: 'success' })
+        }
+        await loadDetail()
+      } catch {} finally {
+        packingId.value = null
+      }
+    },
+  )
+}
+
+async function handleShip(curtain: SalesOrderCurtainDetail) {
+  const isShipped = !!curtain.shipTime
+  confirmAction(
+    isShipped ? '确认撤销发货' : '确认发货',
+    isShipped ? '确认撤销该窗帘的发货状态？' : '确认将该窗帘标记为已发货？',
+    async () => {
+      shippingId.value = curtain.id
+      try {
+        if (isShipped) {
+          await cancelShipSalesOrderCurtain(curtain.id)
+          uni.showToast({ title: '撤销发货成功', icon: 'success' })
+        } else {
+          await shipSalesOrderCurtain(curtain.id)
+          uni.showToast({ title: '发货成功', icon: 'success' })
+        }
+        await loadDetail()
+      } catch {} finally {
+        shippingId.value = null
+      }
+    },
+  )
 }
 
 function goInventory(mat: SalesOrderMaterialDetail) {
@@ -104,16 +164,6 @@ onShow(loadDetail)
             {{ detail.orderDate || '-' }}
           </view>
         </view>
-      </view>
-
-      <!-- 操作卡片 -->
-      <view class="action-card">
-        <wd-button type="primary" size="medium" @click="() => {}">
-          发货
-        </wd-button>
-        <wd-button type="info" size="medium" plain @click="() => {}">
-          打印发货联
-        </wd-button>
       </view>
 
       <!-- 基本信息 -->
@@ -223,24 +273,38 @@ onShow(loadDetail)
         >
           <!-- 窗帘行标题 -->
           <view class="curtain-header">
-            <view class="flex items-center gap-8rpx">
+            <view class="min-w-0 flex flex-1 items-center gap-8rpx">
               <view class="curtain-index">
                 {{ idx + 1 }}
               </view>
-              <view class="text-34rpx text-[#333] font-medium">
+              <view class="truncate text-30rpx text-[#333] font-medium">
                 {{ curtain.curtainName || '-' }}
               </view>
-            </view>
-            <view class="flex items-center gap-12rpx">
-              <view class="curtain-status-badge" :class="`status-${getStatusColorType(curtain.status)}`">
+              <view class="curtain-status-badge flex-shrink-0" :class="`status-${getStatusColorType(curtain.status)}`">
                 {{ getStatusLabel(curtain.status) }}
               </view>
             </view>
-            <view class="flex items-center gap-12rpx">
-              <view class="curtain-detail-btn" @click.stop="goCurtainDetail(curtain.id)">
-                详情>
-              </view>
-            </view>
+            <wd-icon name="arrow-right" size="32rpx" color="#1890ff" class="ml-12rpx flex-shrink-0" @click.stop="goCurtainDetail(curtain.id)" />
+          </view>
+
+          <!-- 窗帘行操作栏 -->
+          <view class="curtain-action-bar">
+            <wd-button
+              :type="curtain.packTime ? 'warning' : 'primary'"
+              size="small"
+              :loading="packingId === curtain.id"
+              @click.stop="handlePack(curtain)"
+            >
+              {{ curtain.packTime ? '撤销打包' : '打包' }}
+            </wd-button>
+            <wd-button
+              :type="curtain.shipTime ? 'warning' : 'success'"
+              size="small"
+              :loading="shippingId === curtain.id"
+              @click.stop="handleShip(curtain)"
+            >
+              {{ curtain.shipTime ? '撤销发货' : '发货' }}
+            </wd-button>
           </view>
 
           <!-- 结构行 -->
@@ -492,10 +556,14 @@ onShow(loadDetail)
 }
 
 .material-item-row {
-  width: 33.333%;
+  width: 20%;
   display: flex;
   flex-direction: column;
   gap: 4rpx;
+
+  &:nth-child(2) {
+    width: 40%;
+  }
 }
 
 .material-item-label {
@@ -551,6 +619,33 @@ onShow(loadDetail)
 .status-default {
   background-color: #f5f5f5;
   color: #999;
+}
+
+.curtain-action-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+  margin-top: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.curtain-action-btn {
+  padding: 8rpx 28rpx;
+  border-radius: 6rpx;
+  font-size: 26rpx;
+  font-weight: 500;
+
+  &--pack {
+    color: #fa8c16;
+    border: 1rpx solid #fa8c16;
+    background-color: #fff7e6;
+  }
+
+  &--ship {
+    color: #fff;
+    border: 1rpx solid #1890ff;
+    background-color: #1890ff;
+  }
 }
 
 .action-card {
