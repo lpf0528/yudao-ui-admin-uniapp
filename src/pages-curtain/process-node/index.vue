@@ -22,6 +22,31 @@ const orderNo = ref('')
 const orderDetail = ref<SalesOrderDetail | null>(null)
 const searching = ref(false)
 
+type DeliveryLevel = 'overdue' | 'today' | 'soon' | 'normal'
+
+interface DeliveryStatus {
+  text: string
+  level: DeliveryLevel
+}
+
+const deliveryStatus = computed<DeliveryStatus | null>(() => {
+  const date = orderDetail.value?.deliveryDate
+  if (!date)
+    return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(date)
+  target.setHours(0, 0, 0, 0)
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000)
+  if (diffDays < 0)
+    return { text: `已超期 ${-diffDays} 天`, level: 'overdue' }
+  if (diffDays === 0)
+    return { text: '今日要交货', level: 'today' }
+  if (diffDays <= 3)
+    return { text: `还有 ${diffDays} 天交货`, level: 'soon' }
+  return { text: `还有 ${diffDays} 天交货`, level: 'normal' }
+})
+
 // 是否纯面料单（无成品帘工序）
 const isFabricOnly = computed(() => {
   const t = orderDetail.value?.types ?? ''
@@ -106,6 +131,21 @@ function selectUser(user: WorkshopUserSimple) {
             />
           </view>
         </view>
+      </view>
+
+      <!-- 交货提醒 -->
+      <view v-if="deliveryStatus" class="delivery-divider" />
+      <view v-if="deliveryStatus" class="delivery-badge" :class="`delivery-badge--${deliveryStatus.level}`">
+        <view
+          class="text-28rpx"
+          :class="{
+            'i-carbon-alarm': deliveryStatus.level === 'overdue',
+            'i-carbon-warning-filled': deliveryStatus.level === 'today',
+            'i-carbon-time': deliveryStatus.level === 'soon',
+            'i-carbon-calendar': deliveryStatus.level === 'normal',
+          }"
+        />
+        <text class="delivery-text">{{ deliveryStatus.text }}</text>
       </view>
     </view>
 
@@ -361,6 +401,52 @@ function selectUser(user: WorkshopUserSimple) {
 
 .content-wrap {
   padding: 24rpx;
+}
+
+.delivery-divider {
+  width: 2rpx;
+  height: 72rpx;
+  background-color: #f0f0f0;
+  margin: 0 20rpx;
+  flex-shrink: 0;
+}
+
+.delivery-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  flex-shrink: 0;
+
+  &--overdue {
+    background-color: #fff1f0;
+    color: #f5222d;
+  }
+
+  &--today {
+    background-color: #fff7e6;
+    color: #d46b08;
+  }
+
+  &--soon {
+    background-color: #fffbe6;
+    color: #d4b106;
+  }
+
+  &--normal {
+    background-color: #f6ffed;
+    color: #389e0d;
+  }
+}
+
+.delivery-text {
+  font-size: 22rpx;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.4;
 }
 
 .fabric-warning {
