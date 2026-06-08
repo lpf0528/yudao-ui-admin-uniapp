@@ -8,3 +8,7 @@ export interface ProcessNodeSimple {
 export function getProcessNodeSimpleList() {
   return http.get<ProcessNodeSimple[]>('/zc/process-node/simple-list')
 }
+
+export function getMyProcessNodes() {
+  return http.get<ProcessNodeSimple[]>('/zc/user-process-node/my-nodes')
+}

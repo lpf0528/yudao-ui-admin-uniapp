@@ -8,7 +8,7 @@ import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
 import { getBarcodeRegistry } from '@/api/curtain/barcode-registry/index'
 import { getInstallProcess } from '@/api/curtain/install-process/index'
 import { getSalesOrderDetail } from '@/api/curtain/order'
-import { getProcessNodeSimpleList } from '@/api/curtain/process-node/index'
+import { getMyProcessNodes } from '@/api/curtain/process-node/index'
 import { getWorkshopUserSimpleList } from '@/api/curtain/workshop-user/index'
 import { useDictStore, useOperatorStore } from '@/store'
 
@@ -65,6 +65,7 @@ function onTouchEnd() {
 
 const message = useMessage()
 const showCompletedTip = ref(false)
+const showWrongNodeTip = ref(false)
 
 const userList = ref<WorkshopUserSimple[]>([])
 const processNodeList = ref<ProcessNodeSimple[]>([])
@@ -121,15 +122,6 @@ watch(orderDetail, (detail) => {
     activeCurtainId.value = detail.curtains[0]?.id ?? null
 })
 
-// 仅展示主操作员授权的工序节点
-const operatorNodes = computed<ProcessNodeSimple[]>(() => {
-  const nodeIds = primaryOperator.value?.nodeIds ?? []
-  if (!nodeIds.length)
-    return []
-  const idSet = new Set(nodeIds)
-  return processNodeList.value.filter(n => idSet.has(n.id))
-})
-
 const selectedStructure = computed(() => {
   if (!selectedStructureId.value || !orderDetail.value)
     return null
@@ -159,6 +151,14 @@ const isCurrentNodeCompleted = computed(() => {
     return false
   const ids = parseNodeIds(installProcess.value.nodeIds)
   return ids.includes(selectedNodeId.value)
+})
+
+// 当前工序节点不在安装工艺的工序列表中（错误工序）
+const isWrongNode = computed(() => {
+  if (!selectedNodeId.value || !installProcess.value)
+    return false
+  const ids = parseNodeIds(installProcess.value.nodeIds)
+  return !ids.includes(selectedNodeId.value)
 })
 
 const selectedNodeName = computed(() =>
@@ -192,16 +192,24 @@ watch(isCurrentNodeCompleted, (completed) => {
   }, 3000)
 })
 
+watch(isWrongNode, (wrong) => {
+  if (!wrong)
+    return
+  showWrongNodeTip.value = true
+  setTimeout(() => {
+    showWrongNodeTip.value = false
+  }, 3000)
+})
+
 function selectNode(id: number) {
   selectedNodeId.value = selectedNodeId.value === id ? null : id
 }
 
 watch(() => primaryOperator.value?.id, () => {
   selectedNodeId.value = null
-  const nodes = operatorNodes.value
-  if (nodes.length === 1) {
-    selectedNodeId.value = nodes[0].id
-  } else if (nodes.length > 1) {
+  if (processNodeList.value.length === 1) {
+    selectedNodeId.value = processNodeList.value[0].id
+  } else if (processNodeList.value.length > 1) {
     uni.showToast({ title: '请选择当前工序', icon: 'none', duration: 2000 })
   }
 })
@@ -307,11 +315,11 @@ function handleScanCode() {
 onLoad(async (query) => {
   ;[userList.value, processNodeList.value] = await Promise.all([
     getWorkshopUserSimpleList(),
-    getProcessNodeSimpleList(),
+    getMyProcessNodes(),
   ])
   // 初始化工序选择：仅一个工序时自动选中，多个时由用户自行点选
-  if (operatorNodes.value.length === 1)
-    selectedNodeId.value = operatorNodes.value[0].id
+  if (processNodeList.value.length === 1)
+    selectedNodeId.value = processNodeList.value[0].id
   if (query?.orderNo) {
     orderNo.value = query.orderNo
     if (query.curtainId)
@@ -412,9 +420,9 @@ function selectUser(user: WorkshopUserSimple) {
     <!-- 工序节点选择 -->
     <view v-if="primaryOperator" class="process-node-wrap">
       <text class="process-node-label">当前工序</text>
-      <view v-if="operatorNodes.length" class="process-node-list">
+      <view v-if="processNodeList.length" class="process-node-list">
         <view
-          v-for="node in operatorNodes"
+          v-for="node in processNodeList"
           :key="node.id"
           class="process-node-chip"
           :class="{ 'process-node-chip--active': selectedNodeId === node.id }"
@@ -614,6 +622,14 @@ function selectUser(user: WorkshopUserSimple) {
     </view>
   </view>
 
+  <!-- 错误工序居中提示 -->
+  <view v-if="showWrongNodeTip" class="completed-tip-overlay">
+    <view class="wrong-node-tip-box">
+      <view class="i-carbon-warning-filled text-72rpx text-white" />
+      <text class="completed-tip-text">错误的工序！</text>
+    </view>
+  </view>
+
   <!-- 操作员切换弹框 -->
   <wd-popup v-model="showPicker" position="center">
     <view class="picker-wrap">
@@ -739,22 +755,19 @@ function selectUser(user: WorkshopUserSimple) {
   border-radius: 16rpx;
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 16rpx;
-  flex-wrap: wrap;
 }
 
 .process-node-label {
   font-size: 26rpx;
   color: #333;
-  flex-shrink: 0;
 }
 
 .process-node-list {
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
-  flex: 1;
 }
 
 .process-node-chip {
@@ -1255,6 +1268,17 @@ function selectUser(user: WorkshopUserSimple) {
   background-color: rgba(1, 141, 113, 0.92);
   border-radius: 24rpx;
   box-shadow: 0 8rpx 40rpx rgba(1, 141, 113, 0.4);
+}
+
+.wrong-node-tip-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+  padding: 56rpx 80rpx;
+  background-color: rgba(245, 34, 45, 0.92);
+  border-radius: 24rpx;
+  box-shadow: 0 8rpx 40rpx rgba(245, 34, 45, 0.4);
 }
 
 .completed-tip-text {
