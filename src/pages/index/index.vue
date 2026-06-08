@@ -21,11 +21,23 @@
     >
       <view class="i-carbon-scan text-48rpx text-white" />
     </view>
+
+    <!-- 模拟扫码按钮 -->
+    <view class="fixed bottom-200rpx left-32rpx z-10">
+      <wd-button size="small" type="warning" icon="scan" @click="handleSimulateScan">
+        模拟扫码
+      </wd-button>
+    </view>
+
+    <!-- 模拟扫码输入弹窗（命令式调用，仅占位） -->
+    <wd-message-box />
   </view>
 </template>
 
 <script lang="ts" setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
+import { getBarcodeRegistry } from '@/api/curtain/barcode-registry/index'
 import MenuSection from './components/menu-section.vue'
 import UserHeader from './components/user-header.vue'
 
@@ -73,6 +85,36 @@ function onTouchEnd() {
     handleScanCode()
   }
   isDragging.value = false
+}
+
+const message = useMessage()
+
+async function handleSimulateScan() {
+  let result: { value?: string }
+  try {
+    result = await message.prompt({
+      title: '模拟扫码',
+      msg: '请输入码ID（codeId）',
+      inputPlaceholder: '请输入 UUID 格式的码ID',
+    })
+  } catch {
+    return
+  }
+  const codeId = (result.value ?? '').trim()
+  if (!codeId) {
+    uni.showToast({ title: '请输入码ID', icon: 'none' })
+    return
+  }
+  try {
+    const data = await getBarcodeRegistry(codeId)
+    const params = JSON.parse(data.codeContent) as Record<string, unknown>
+    const query = Object.entries(params)
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&')
+    uni.navigateTo({ url: `${data.targetRoute}?${query}` })
+  } catch {
+    uni.showToast({ title: '获取码信息失败，请检查码ID', icon: 'none' })
+  }
 }
 
 function handleScanCode() {
