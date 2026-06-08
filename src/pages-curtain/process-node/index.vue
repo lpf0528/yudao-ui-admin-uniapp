@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { SalesOrderDetail } from '@/api/curtain/order'
+import type { ProcessNodeSimple } from '@/api/curtain/process-node/index'
 import type { WorkshopUserSimple } from '@/api/curtain/workshop-user/index'
 import { storeToRefs } from 'pinia'
 import { getSalesOrderDetail } from '@/api/curtain/order'
+import { getProcessNodeSimpleList } from '@/api/curtain/process-node/index'
 import { getWorkshopUserSimpleList } from '@/api/curtain/workshop-user/index'
-import { useOperatorStore } from '@/store'
+import { useDictStore, useOperatorStore } from '@/store'
 
 definePage({
   style: {
@@ -13,9 +15,15 @@ definePage({
 })
 
 const operatorStore = useOperatorStore()
+const dictStore = useDictStore()
+
+function translateDict(dictType: string, value: any) {
+  return dictStore.getDictData(dictType, value)?.label ?? value
+}
 const { primaryOperator, secondaryOperator } = storeToRefs(operatorStore)
 
 const userList = ref<WorkshopUserSimple[]>([])
+const processNodeList = ref<ProcessNodeSimple[]>([])
 const pickerTarget = ref<'primary' | 'secondary'>('primary')
 const showPicker = ref(false)
 const orderNo = ref('')
@@ -49,17 +57,63 @@ const deliveryStatus = computed<DeliveryStatus | null>(() => {
   return { text: `还有 ${diffDays} 天交货`, level: 'normal' }
 })
 
-const filteredCurtains = computed(() => {
-  const curtains = orderDetail.value?.curtains ?? []
-  if (!locateCurtainId.value)
-    return curtains
-  return curtains.filter(c => c.id === locateCurtainId.value)
+const selectedStructureId = ref<number | null>(null)
+const selectedNodeId = ref<number | null>(null)
+const activeCurtainId = ref<number | null>(null)
+
+const activeCurtain = computed(() => {
+  if (!orderDetail.value)
+    return null
+  return orderDetail.value.curtains.find(c => c.id === activeCurtainId.value) ?? null
 })
 
-function filteredStructures(curtainId: number, structures: SalesOrderDetail['curtains'][0]['structures']) {
-  if (curtainId !== locateCurtainId.value || !locateStructureId.value)
-    return structures
-  return structures.filter(s => s.id === locateStructureId.value)
+watch(orderDetail, (detail) => {
+  if (!detail)
+    return
+  if (locateCurtainId.value && detail.curtains.some(c => c.id === locateCurtainId.value))
+    activeCurtainId.value = locateCurtainId.value
+  else
+    activeCurtainId.value = detail.curtains[0]?.id ?? null
+})
+
+// 仅展示主操作员授权的工序节点
+const operatorNodes = computed<ProcessNodeSimple[]>(() => {
+  const nodeIds = primaryOperator.value?.nodeIds ?? []
+  if (!nodeIds.length)
+    return []
+  const idSet = new Set(nodeIds)
+  return processNodeList.value.filter(n => idSet.has(n.id))
+})
+
+const selectedStructure = computed(() => {
+  if (!selectedStructureId.value || !orderDetail.value)
+    return null
+  for (const curtain of orderDetail.value.curtains) {
+    const s = curtain.structures.find(s => s.id === selectedStructureId.value)
+    if (s)
+      return { curtain, structure: s }
+  }
+  return null
+})
+
+function selectNode(id: number) {
+  selectedNodeId.value = selectedNodeId.value === id ? null : id
+}
+
+watch(() => primaryOperator.value?.id, () => {
+  selectedNodeId.value = null
+  const nodes = operatorNodes.value
+  if (nodes.length === 1) {
+    selectedNodeId.value = nodes[0].id
+  } else if (nodes.length > 1) {
+    uni.showToast({ title: '请选择当前工序', icon: 'none', duration: 2000 })
+  }
+})
+
+function selectStructure(id: number) {
+  if (locateStructureId.value)
+    return
+  selectedStructureId.value = selectedStructureId.value === id ? null : id
 }
 
 // 是否纯面料单（无成品帘工序）
@@ -85,14 +139,28 @@ async function handleOrderSearch() {
 }
 
 onLoad(async (query) => {
-  userList.value = await getWorkshopUserSimpleList()
+  ;[userList.value, processNodeList.value] = await Promise.all([
+    getWorkshopUserSimpleList(),
+    getProcessNodeSimpleList(),
+  ])
   if (query?.orderNo) {
     orderNo.value = query.orderNo
     if (query.curtainId)
       locateCurtainId.value = Number(query.curtainId)
-    if (query.structureId)
+    if (query.structureId) {
       locateStructureId.value = Number(query.structureId)
+      selectedStructureId.value = Number(query.structureId)
+    }
     await handleOrderSearch()
+    if (locateStructureId.value && orderDetail.value) {
+      const found = orderDetail.value.curtains.some(c =>
+        c.structures.some(s => s.id === locateStructureId.value),
+      )
+      if (!found) {
+        locateStructureId.value = null
+        selectedStructureId.value = null
+      }
+    }
   }
 })
 
@@ -160,7 +228,7 @@ function selectUser(user: WorkshopUserSimple) {
       <view v-if="deliveryStatus" class="delivery-divider" />
       <view v-if="deliveryStatus" class="delivery-badge" :class="`delivery-badge--${deliveryStatus.level}`">
         <view
-          class="text-28rpx"
+          class="text-36rpx"
           :class="{
             'i-carbon-alarm': deliveryStatus.level === 'overdue',
             'i-carbon-warning-filled': deliveryStatus.level === 'today',
@@ -216,61 +284,144 @@ function selectUser(user: WorkshopUserSimple) {
     <view v-else class="content-wrap">
       <!-- 订单基本信息 -->
       <view class="order-card">
-        <view class="order-card-row">
-          <text class="order-card-label">订单号</text>
-          <text class="order-card-value font-600">{{ orderDetail.orderNo }}</text>
-        </view>
-        <view class="order-card-row">
-          <text class="order-card-label">客户</text>
-          <text class="order-card-value">{{ orderDetail.customerName }}</text>
-        </view>
-        <view class="order-card-row">
-          <text class="order-card-label">交付日期</text>
-          <text class="order-card-value">{{ orderDetail.deliveryDate || '-' }}</text>
-        </view>
-        <view class="order-card-row">
-          <text class="order-card-label">订单类型</text>
-          <text class="order-card-value">{{ orderDetail.types || '-' }}</text>
-        </view>
-        <view v-if="orderDetail.isExpedited" class="expedited-tag">
-          加急
+        <view class="order-card-body">
+          <!-- 左：基本信息 -->
+          <view class="order-card-left">
+            <view class="order-card-row">
+              <text class="order-card-label">订单号</text>
+              <text class="order-card-value order-card-value--no font-600">{{ orderDetail.orderNo }}</text>
+            </view>
+            <view class="order-card-row">
+              <text class="order-card-label">客户</text>
+              <text class="order-card-value">{{ orderDetail.customerName }}</text>
+            </view>
+            <view class="order-card-row">
+              <text class="order-card-label">交付日期</text>
+              <text class="order-card-value">{{ orderDetail.deliveryDate || '-' }}</text>
+            </view>
+            <!-- <view class="order-card-row">
+              <text class="order-card-label">订单类型</text>
+              <text class="order-card-value">{{ orderDetail.types || '-' }}</text>
+            </view> -->
+            <view v-if="orderDetail.isExpedited" class="expedited-tag">
+              加急
+            </view>
+          </view>
+          <!-- 右：工序节点 -->
+          <view class="order-card-divider" />
+          <view class="order-card-right">
+            <text class="node-section-title">当前工序</text>
+            <view v-if="operatorNodes.length" class="node-list">
+              <view
+                v-for="node in operatorNodes"
+                :key="node.id"
+                class="node-chip"
+                :class="{ 'node-chip--active': selectedNodeId === node.id }"
+                @tap="selectNode(node.id)"
+              >
+                <view v-if="selectedNodeId === node.id" class="i-carbon-checkmark mr-6rpx text-20rpx" />
+                <text>{{ node.name }}</text>
+              </view>
+            </view>
+            <text v-else class="node-empty">暂无工序</text>
+          </view>
         </view>
       </view>
 
-      <!-- 窗帘行列表 -->
-      <view
-        v-for="curtain in filteredCurtains"
-        :key="curtain.id"
-        class="curtain-card"
-        :class="{ 'curtain-card--located': curtain.id === locateCurtainId }"
-      >
-        <view class="curtain-header">
-          <text class="curtain-index">第 {{ curtain.index }} 帘</text>
-          <text class="curtain-name">{{ curtain.curtainName }}</text>
-          <text v-if="curtain.room" class="curtain-room">{{ curtain.room }}</text>
-        </view>
-        <view
-          v-for="structure in filteredStructures(curtain.id, curtain.structures)"
-          :key="structure.id"
-          class="structure-block"
-          :class="{ 'structure-block--located': structure.id === locateStructureId }"
-        >
-          <view class="structure-title">
-            {{ structure.structureName }}
-            <text class="structure-size">{{ structure.width }} × {{ structure.height }}</text>
+      <!-- 窗帘行列表（Tab） -->
+      <view class="curtain-tabs-card">
+        <scroll-view scroll-x class="curtain-tabs-scroll">
+          <view class="curtain-tabs">
+            <view
+              v-for="curtain in orderDetail.curtains"
+              :key="curtain.id"
+              class="curtain-tab"
+              :class="{ 'curtain-tab--active': curtain.id === activeCurtainId }"
+              @tap="activeCurtainId = curtain.id"
+            >
+              <text class="curtain-tab-index">第{{ curtain.index }}帘</text>
+              <text v-if="curtain.curtainName" class="curtain-tab-room">{{ curtain.curtainName }}</text>
+            </view>
           </view>
+        </scroll-view>
+        <view v-if="activeCurtain" class="curtain-tab-content">
           <view
-            v-for="mat in structure.materials"
-            :key="mat.id"
-            class="material-row"
+            v-for="(structure, structureIndex) in activeCurtain.structures"
+            :key="structure.id"
+            class="structure-block"
+            :class="{
+              'structure-block--active': structure.id === selectedStructureId,
+              'structure-block--selectable': !locateStructureId,
+            }"
+            @tap="selectStructure(structure.id)"
           >
-            <view class="material-left">
-              <text class="material-element">{{ mat.elementName }}</text>
-              <text class="material-product">{{ mat.productName }}</text>
+            <view class="structure-row">
+              <text class="structure-name-label">#{{ structureIndex + 1 }} {{ structure.structureName }}</text>
+              <view class="material-tags">
+                <view
+                  v-for="mat in structure.materials"
+                  :key="mat.id"
+                  class="material-tag"
+                >
+                  <text class="mat-element">{{ mat.elementName }}</text>
+                  <text class="mat-product">{{ mat.productName }}</text>
+                </view>
+              </view>
             </view>
-            <view class="material-right">
-              <text class="material-qty">{{ mat.quantity }} {{ mat.unitValue }}</text>
-            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 选中结构详情 -->
+      <view v-if="selectedStructure" class="structure-detail-card">
+        <view class="structure-detail-header">
+          <text class="structure-detail-title">{{ selectedStructure.curtain.curtainName }} · {{ selectedStructure.structure.structureName }}</text>
+          <text class="structure-detail-size">高×宽：{{ selectedStructure.structure.width }} × {{ selectedStructure.structure.height }}</text>
+        </view>
+        <view class="structure-detail-body">
+          <view v-if="selectedStructure.structure.installProcessName" class="structure-detail-item">
+            <text class="structure-detail-label">安装工艺</text>
+            <text class="structure-detail-value">{{ selectedStructure.structure.installProcessName }}</text>
+          </view>
+          <view v-if="selectedStructure.structure.openMethod" class="structure-detail-item">
+            <text class="structure-detail-label">开合方式</text>
+            <text class="structure-detail-value">{{ translateDict('zc_open_method', selectedStructure.structure.openMethod) }}</text>
+          </view>
+          <view v-if="selectedStructure.structure.processType" class="structure-detail-item">
+            <text class="structure-detail-label">加工类型</text>
+            <text class="structure-detail-value">{{ translateDict('zc_process_type', selectedStructure.structure.processType) }}</text>
+          </view>
+          <view class="structure-detail-item">
+            <text class="structure-detail-label">定型</text>
+            <text class="structure-detail-value">{{ selectedStructure.structure.isShaping ? '是' : '否' }}</text>
+          </view>
+          <view v-if="selectedStructure.structure.pleatsNum" class="structure-detail-item">
+            <text class="structure-detail-label">褶数</text>
+            <text class="structure-detail-value">{{ selectedStructure.structure.pleatsNum }}</text>
+          </view>
+          <view v-if="selectedStructure.structure.pleatsDistance" class="structure-detail-item">
+            <text class="structure-detail-label">褶距</text>
+            <text class="structure-detail-value">{{ selectedStructure.structure.pleatsDistance }}</text>
+          </view>
+          <view v-if="selectedStructure.structure.skirtHeight" class="structure-detail-item">
+            <text class="structure-detail-label">裙摆高</text>
+            <text class="structure-detail-value">{{ selectedStructure.structure.skirtHeight }}</text>
+          </view>
+          <view v-if="selectedStructure.structure.leftCorner" class="structure-detail-item">
+            <text class="structure-detail-label">左弯角</text>
+            <text class="structure-detail-value">{{ selectedStructure.structure.leftCorner }}</text>
+          </view>
+          <view v-if="selectedStructure.structure.rightCorner" class="structure-detail-item">
+            <text class="structure-detail-label">右弯角</text>
+            <text class="structure-detail-value">{{ selectedStructure.structure.rightCorner }}</text>
+          </view>
+          <view v-if="selectedStructure.structure.pasteDirection" class="structure-detail-item">
+            <text class="structure-detail-label">粘贴方向</text>
+            <text class="structure-detail-value">{{ translateDict('zc_paste_direction', selectedStructure.structure.pasteDirection) }}</text>
+          </view>
+          <view v-if="selectedStructure.structure.note" class="structure-detail-item structure-detail-item--full">
+            <text class="structure-detail-label">备注</text>
+            <text class="structure-detail-value">{{ selectedStructure.structure.note }}</text>
           </view>
         </view>
       </view>
@@ -361,7 +512,7 @@ function selectUser(user: WorkshopUserSimple) {
 
 .operator-role {
   font-size: 22rpx;
-  color: #999;
+  color: #333;
   margin-bottom: 6rpx;
 
   &.secondary {
@@ -468,7 +619,7 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .delivery-text {
-  font-size: 22rpx;
+  font-size: 28rpx;
   font-weight: 600;
   text-align: center;
   line-height: 1.4;
@@ -493,11 +644,76 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .order-card {
-  position: relative;
-  padding: 28rpx 32rpx;
   background-color: #fff;
   border-radius: 12rpx;
   margin-bottom: 20rpx;
+  overflow: hidden;
+}
+
+.order-card-body {
+  display: flex;
+  align-items: stretch;
+}
+
+.order-card-left {
+  flex: 2;
+  padding: 28rpx 32rpx;
+  position: relative;
+  min-width: 0;
+}
+
+.order-card-divider {
+  width: 2rpx;
+  background-color: #d9d9d9;
+  flex-shrink: 0;
+}
+
+.order-card-right {
+  flex: 1;
+  padding: 24rpx 20rpx;
+  background-color: #fafafa;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.node-section-title {
+  font-size: 22rpx;
+  color: #333;
+  margin-bottom: 4rpx;
+}
+
+.node-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.node-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14rpx 0;
+  border-radius: 10rpx;
+  border: 2rpx solid #ccc;
+  background-color: #e0e0e0;
+  font-size: 28rpx;
+  color: #666;
+  font-weight: 500;
+
+  &--active {
+    background-color: #018d71;
+    border-color: #018d71;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 4rpx 12rpx rgba(1, 141, 113, 0.25);
+  }
+}
+
+.node-empty {
+  font-size: 24rpx;
+  color: #ccc;
+  text-align: center;
 }
 
 .order-card-row {
@@ -508,15 +724,19 @@ function selectUser(user: WorkshopUserSimple) {
 
 .order-card-label {
   width: 140rpx;
-  font-size: 26rpx;
-  color: #999;
+  font-size: 30rpx;
+  color: #333;
   flex-shrink: 0;
 }
 
 .order-card-value {
   flex: 1;
-  font-size: 28rpx;
+  font-size: 32rpx;
   color: #333;
+
+  &--no {
+    font-size: 26rpx;
+  }
 }
 
 .expedited-tag {
@@ -532,15 +752,11 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .curtain-card {
-  background-color: #fff;
+  background-color: #f5f5f5;
   border-radius: 12rpx;
   margin-bottom: 20rpx;
   overflow: hidden;
-
-  &--located {
-    border: 2rpx solid #018d71;
-    box-shadow: 0 0 0 4rpx rgba(1, 141, 113, 0.12);
-  }
+  border: 2rpx solid #e0e0e0;
 }
 
 .curtain-header {
@@ -548,8 +764,8 @@ function selectUser(user: WorkshopUserSimple) {
   align-items: center;
   gap: 12rpx;
   padding: 22rpx 32rpx;
-  background-color: #f0faf7;
-  border-bottom: 1rpx solid #e8f4f0;
+  background-color: #e8e8e8;
+  border-bottom: 1rpx solid #d5d5d5;
 }
 
 .curtain-index {
@@ -561,13 +777,13 @@ function selectUser(user: WorkshopUserSimple) {
 .curtain-name {
   font-size: 28rpx;
   color: #333;
-  font-weight: 500;
+  font-weight: 700;
   flex: 1;
 }
 
 .curtain-room {
   font-size: 24rpx;
-  color: #999;
+  color: #333;
 }
 
 .structure-block {
@@ -578,60 +794,190 @@ function selectUser(user: WorkshopUserSimple) {
     border-bottom: none;
   }
 
-  &--located {
-    background-color: #f0faf7;
+  &--active {
+    .structure-row {
+      border-color: #018d71;
+      background-color: #b8e0d4;
+    }
+  }
+
+  &--selectable {
+    &:active {
+      background-color: #f5f5f5;
+    }
   }
 }
 
-.structure-title {
+.structure-row {
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  font-size: 26rpx;
-  color: #555;
-  font-weight: 500;
-  margin-bottom: 12rpx;
-}
-
-.structure-size {
-  font-size: 24rpx;
-  color: #aaa;
-  font-weight: 400;
-}
-
-.material-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10rpx 0;
-}
-
-.material-left {
-  display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   gap: 12rpx;
+  border: 2rpx solid #e0e0e0;
+  border-radius: 8rpx;
+  padding: 12rpx 16rpx;
 }
 
-.material-element {
-  font-size: 22rpx;
-  color: #fff;
-  background-color: #aaa;
-  padding: 2rpx 10rpx;
-  border-radius: 4rpx;
-}
-
-.material-product {
+.structure-name-label {
   font-size: 26rpx;
   color: #333;
-}
-
-.material-right {
+  font-weight: 600;
   flex-shrink: 0;
 }
 
-.material-qty {
+.material-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.material-tag {
+  display: flex;
+  align-items: center;
+  border-radius: 6rpx;
+  overflow: hidden;
+  border: 2rpx solid #bbb;
+}
+
+.mat-element {
+  font-size: 22rpx;
+  color: #fff;
+  background-color: #888;
+  padding: 4rpx 10rpx;
+}
+
+.mat-product {
+  font-size: 24rpx;
+  color: #333;
+  background-color: #f5f5f5;
+  padding: 4rpx 12rpx;
+}
+
+.curtain-tabs-card {
+  background-color: #fff;
+  border-radius: 12rpx;
+  margin-bottom: 20rpx;
+  overflow: hidden;
+  border: 2rpx solid #e0e0e0;
+}
+
+.curtain-tabs-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.curtain-tabs {
+  display: flex;
+  background-color: #f5f5f5;
+  border-bottom: 2rpx solid #e0e0e0;
+}
+
+.curtain-tab {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8rpx;
+  padding: 18rpx 28rpx;
+  border-bottom: 4rpx solid transparent;
+  flex-shrink: 0;
+
+  &--active {
+    background-color: #018d71;
+    border-bottom-color: #018d71;
+
+    .curtain-tab-index {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .curtain-tab-room {
+      color: #fff;
+    }
+  }
+}
+
+.curtain-tab-index {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.curtain-tab-room {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.curtain-tab-content {
+  padding: 0 0 8rpx;
+}
+
+.curtain-tab-name {
   font-size: 26rpx;
   color: #666;
+  padding: 16rpx 32rpx 8rpx;
+  font-weight: 600;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.structure-detail-card {
+  background-color: #fff;
+  border-radius: 12rpx;
+  margin-bottom: 20rpx;
+  overflow: hidden;
+  border: 2rpx solid #018d71;
+}
+
+.structure-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 28rpx;
+  background-color: #e8f4f0;
+  border-bottom: 1rpx solid #c8e8df;
+}
+
+.structure-detail-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #018d71;
+}
+
+.structure-detail-size {
+  font-size: 26rpx;
+  color: #333;
+  flex-shrink: 0;
+}
+
+.structure-detail-body {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 16rpx;
+  gap: 12rpx;
+}
+
+.structure-detail-item {
+  display: flex;
+  flex-direction: column;
+  padding: 10rpx 16rpx;
+  min-width: 160rpx;
+  border: 2rpx solid #e0e0e0;
+  border-radius: 8rpx;
+
+  &--full {
+    width: 100%;
+  }
+}
+
+.structure-detail-label {
+  font-size: 22rpx;
+  color: #999;
+  margin-bottom: 4rpx;
+}
+
+.structure-detail-value {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 700;
 }
 
 .picker-wrap {

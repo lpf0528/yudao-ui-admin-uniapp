@@ -3,6 +3,7 @@ import { http } from '@/http/http'
 export interface WorkshopUserSimple {
   id: number
   name: string
+  nodeIds: number[]
 }
 
 export function getWorkshopUserSimpleList() {
