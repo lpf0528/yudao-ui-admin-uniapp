@@ -21,6 +21,8 @@ const showPicker = ref(false)
 const orderNo = ref('')
 const orderDetail = ref<SalesOrderDetail | null>(null)
 const searching = ref(false)
+const locateCurtainId = ref<number | null>(null)
+const locateStructureId = ref<number | null>(null)
 
 type DeliveryLevel = 'overdue' | 'today' | 'soon' | 'normal'
 
@@ -47,6 +49,19 @@ const deliveryStatus = computed<DeliveryStatus | null>(() => {
   return { text: `还有 ${diffDays} 天交货`, level: 'normal' }
 })
 
+const filteredCurtains = computed(() => {
+  const curtains = orderDetail.value?.curtains ?? []
+  if (!locateCurtainId.value)
+    return curtains
+  return curtains.filter(c => c.id === locateCurtainId.value)
+})
+
+function filteredStructures(curtainId: number, structures: SalesOrderDetail['curtains'][0]['structures']) {
+  if (curtainId !== locateCurtainId.value || !locateStructureId.value)
+    return structures
+  return structures.filter(s => s.id === locateStructureId.value)
+}
+
 // 是否纯面料单（无成品帘工序）
 const isFabricOnly = computed(() => {
   const t = orderDetail.value?.types ?? ''
@@ -69,8 +84,16 @@ async function handleOrderSearch() {
   }
 }
 
-onMounted(async () => {
+onLoad(async (query) => {
   userList.value = await getWorkshopUserSimpleList()
+  if (query?.orderNo) {
+    orderNo.value = query.orderNo
+    if (query.curtainId)
+      locateCurtainId.value = Number(query.curtainId)
+    if (query.structureId)
+      locateStructureId.value = Number(query.structureId)
+    await handleOrderSearch()
+  }
 })
 
 function openPicker(target: 'primary' | 'secondary') {
@@ -216,9 +239,10 @@ function selectUser(user: WorkshopUserSimple) {
 
       <!-- 窗帘行列表 -->
       <view
-        v-for="curtain in orderDetail.curtains"
+        v-for="curtain in filteredCurtains"
         :key="curtain.id"
         class="curtain-card"
+        :class="{ 'curtain-card--located': curtain.id === locateCurtainId }"
       >
         <view class="curtain-header">
           <text class="curtain-index">第 {{ curtain.index }} 帘</text>
@@ -226,9 +250,10 @@ function selectUser(user: WorkshopUserSimple) {
           <text v-if="curtain.room" class="curtain-room">{{ curtain.room }}</text>
         </view>
         <view
-          v-for="structure in curtain.structures"
+          v-for="structure in filteredStructures(curtain.id, curtain.structures)"
           :key="structure.id"
           class="structure-block"
+          :class="{ 'structure-block--located': structure.id === locateStructureId }"
         >
           <view class="structure-title">
             {{ structure.structureName }}
@@ -511,6 +536,11 @@ function selectUser(user: WorkshopUserSimple) {
   border-radius: 12rpx;
   margin-bottom: 20rpx;
   overflow: hidden;
+
+  &--located {
+    border: 2rpx solid #018d71;
+    box-shadow: 0 0 0 4rpx rgba(1, 141, 113, 0.12);
+  }
 }
 
 .curtain-header {
@@ -546,6 +576,10 @@ function selectUser(user: WorkshopUserSimple) {
 
   &:last-child {
     border-bottom: none;
+  }
+
+  &--located {
+    background-color: #f0faf7;
   }
 }
 
