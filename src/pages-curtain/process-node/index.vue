@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import type { InstallProcess } from '@/api/curtain/install-process/index'
 import type { SalesOrderDetail } from '@/api/curtain/order'
 import type { ProcessNodeSimple } from '@/api/curtain/process-node/index'
 import type { WorkshopUserSimple } from '@/api/curtain/workshop-user/index'
 import { storeToRefs } from 'pinia'
+import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
+import { getBarcodeRegistry } from '@/api/curtain/barcode-registry/index'
+import { getInstallProcess } from '@/api/curtain/install-process/index'
 import { getSalesOrderDetail } from '@/api/curtain/order'
 import { getProcessNodeSimpleList } from '@/api/curtain/process-node/index'
 import { getWorkshopUserSimpleList } from '@/api/curtain/workshop-user/index'
@@ -21,6 +25,46 @@ function translateDict(dictType: string, value: any) {
   return dictStore.getDictData(dictType, value)?.label ?? value
 }
 const { primaryOperator, secondaryOperator } = storeToRefs(operatorStore)
+
+const pos = reactive({ x: 0, y: 0 })
+const isDragging = ref(false)
+let startTouch = { x: 0, y: 0 }
+let startPos = { x: 0, y: 0 }
+let btnSize = 0
+
+onMounted(() => {
+  const info = uni.getSystemInfoSync()
+  const ratio = info.windowWidth / 750
+  btnSize = Math.round(100 * ratio)
+  pos.x = info.windowWidth - btnSize - Math.round(32 * ratio)
+  pos.y = info.windowHeight - Math.round(200 * ratio) - btnSize
+})
+
+const btnStyle = computed(() => ({ left: `${pos.x}px`, top: `${pos.y}px` }))
+
+function onTouchStart(e: TouchEvent) {
+  isDragging.value = false
+  startTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  startPos = { x: pos.x, y: pos.y }
+}
+
+function onTouchMove(e: TouchEvent) {
+  isDragging.value = true
+  const info = uni.getSystemInfoSync()
+  const dx = e.touches[0].clientX - startTouch.x
+  const dy = e.touches[0].clientY - startTouch.y
+  pos.x = Math.max(0, Math.min(info.windowWidth - btnSize, startPos.x + dx))
+  pos.y = Math.max(0, Math.min(info.windowHeight - btnSize, startPos.y + dy))
+}
+
+function onTouchEnd() {
+  if (!isDragging.value)
+    handleScanCode()
+  isDragging.value = false
+}
+
+const message = useMessage()
+const showCompletedTip = ref(false)
 
 const userList = ref<WorkshopUserSimple[]>([])
 const processNodeList = ref<ProcessNodeSimple[]>([])
@@ -60,6 +104,7 @@ const deliveryStatus = computed<DeliveryStatus | null>(() => {
 const selectedStructureId = ref<number | null>(null)
 const selectedNodeId = ref<number | null>(null)
 const activeCurtainId = ref<number | null>(null)
+const installProcess = ref<InstallProcess | null>(null)
 
 const activeCurtain = computed(() => {
   if (!orderDetail.value)
@@ -94,6 +139,57 @@ const selectedStructure = computed(() => {
       return { curtain, structure: s }
   }
   return null
+})
+
+// 解析安装工艺的 nodeIds（后端可能返回 JSON 字符串或数组）
+function parseNodeIds(raw: number[] | string): number[] {
+  if (Array.isArray(raw))
+    return raw
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+// 当前工序节点是否已在安装工艺的工序列表中（提示已完成）
+const isCurrentNodeCompleted = computed(() => {
+  if (!selectedNodeId.value || !installProcess.value)
+    return false
+  const ids = parseNodeIds(installProcess.value.nodeIds)
+  return ids.includes(selectedNodeId.value)
+})
+
+const selectedNodeName = computed(() =>
+  processNodeList.value.find(n => n.id === selectedNodeId.value)?.name ?? '',
+)
+
+watch(
+  () => selectedStructure.value?.structure.installProcessId,
+  async (processId) => {
+    installProcess.value = null
+    if (!processId)
+      return
+    try {
+      installProcess.value = await getInstallProcess(processId)
+    } catch {
+      // 获取失败时静默处理，不影响主流程
+    }
+  },
+  { immediate: true },
+)
+
+watch(isCurrentNodeCompleted, (completed) => {
+  if (!completed)
+    return
+  const audio = uni.createInnerAudioContext()
+  audio.src = '/static/audio/completed_node.mp3'
+  audio.play()
+  showCompletedTip.value = true
+  setTimeout(() => {
+    showCompletedTip.value = false
+  }, 3000)
 })
 
 function selectNode(id: number) {
@@ -138,11 +234,84 @@ async function handleOrderSearch() {
   }
 }
 
+async function processBarcodeData(codeId: string) {
+  try {
+    const data = await getBarcodeRegistry(codeId)
+    const content = JSON.parse(data.codeContent ?? '{}') as Record<string, any>
+    if (content.orderNo) {
+      orderNo.value = content.orderNo
+      locateCurtainId.value = content.curtainId ? Number(content.curtainId) : null
+      if (content.structureId) {
+        locateStructureId.value = Number(content.structureId)
+        selectedStructureId.value = Number(content.structureId)
+      } else {
+        locateStructureId.value = null
+        selectedStructureId.value = null
+      }
+      await handleOrderSearch()
+      if (locateStructureId.value && orderDetail.value) {
+        const found = orderDetail.value.curtains.some(c =>
+          c.structures.some(s => s.id === locateStructureId.value),
+        )
+        if (!found) {
+          locateStructureId.value = null
+          selectedStructureId.value = null
+        }
+      }
+    } else {
+      uni.showToast({ title: '该码暂不支持解析', icon: 'none' })
+    }
+  } catch {
+    uni.showToast({ title: '码ID无效或已过期', icon: 'none' })
+  }
+}
+
+async function handleSimulateScan() {
+  let result: { value?: string }
+  try {
+    result = await message.prompt({
+      title: '模拟扫码',
+      msg: '请输入码ID（codeId）',
+      inputPlaceholder: '请输入 UUID 格式的码ID',
+    })
+  } catch {
+    return
+  }
+  const codeId = (result.value ?? '').trim()
+  if (!codeId) {
+    uni.showToast({ title: '请输入码ID', icon: 'none' })
+    return
+  }
+  await processBarcodeData(codeId)
+}
+
+function handleScanCode() {
+  // #ifndef H5
+  uni.scanCode({
+    onlyFromCamera: false,
+    async success(res) {
+      await processBarcodeData(res.result)
+    },
+    fail(err) {
+      if (err.errMsg?.includes('cancel'))
+        return
+      uni.showToast({ title: '扫码失败，请重试', icon: 'none' })
+    },
+  })
+  // #endif
+  // #ifdef H5
+  handleSimulateScan()
+  // #endif
+}
+
 onLoad(async (query) => {
   ;[userList.value, processNodeList.value] = await Promise.all([
     getWorkshopUserSimpleList(),
     getProcessNodeSimpleList(),
   ])
+  // 初始化工序选择：仅一个工序时自动选中，多个时由用户自行点选
+  if (operatorNodes.value.length === 1)
+    selectedNodeId.value = operatorNodes.value[0].id
   if (query?.orderNo) {
     orderNo.value = query.orderNo
     if (query.curtainId)
@@ -240,6 +409,24 @@ function selectUser(user: WorkshopUserSimple) {
       </view>
     </view>
 
+    <!-- 工序节点选择 -->
+    <view v-if="primaryOperator" class="process-node-wrap">
+      <text class="process-node-label">当前工序</text>
+      <view v-if="operatorNodes.length" class="process-node-list">
+        <view
+          v-for="node in operatorNodes"
+          :key="node.id"
+          class="process-node-chip"
+          :class="{ 'process-node-chip--active': selectedNodeId === node.id }"
+          @tap="selectNode(node.id)"
+        >
+          <view v-if="selectedNodeId === node.id" class="i-carbon-checkmark mr-8rpx text-22rpx" />
+          <text>{{ node.name }}</text>
+        </view>
+      </view>
+      <text v-else class="process-node-empty">该操作员暂无工序配置</text>
+    </view>
+
     <!-- 订单号输入框 -->
     <view class="order-input-wrap">
       <view class="order-input-box">
@@ -247,16 +434,16 @@ function selectUser(user: WorkshopUserSimple) {
         <input
           v-model="orderNo"
           class="order-input"
-          placeholder="请输入订单号"
+          placeholder=""
           placeholder-style="color:#bbb"
-          confirm-type="search"
+          confirm-type="search" disabled
           @confirm="handleOrderSearch"
         >
-        <view
+        <!-- <view
           v-if="orderNo"
           class="i-carbon-close-filled text-32rpx text-#ccc"
-          @tap="orderNo = ''"
-        />
+          @tap="orderNo = ''; orderDetail = null"
+        /> -->
       </view>
     </view>
 
@@ -287,10 +474,10 @@ function selectUser(user: WorkshopUserSimple) {
         <view class="order-card-body">
           <!-- 左：基本信息 -->
           <view class="order-card-left">
-            <view class="order-card-row">
+            <!-- <view class="order-card-row">
               <text class="order-card-label">订单号</text>
               <text class="order-card-value order-card-value--no font-600">{{ orderDetail.orderNo }}</text>
-            </view>
+            </view> -->
             <view class="order-card-row">
               <text class="order-card-label">客户</text>
               <text class="order-card-value">{{ orderDetail.customerName }}</text>
@@ -299,31 +486,9 @@ function selectUser(user: WorkshopUserSimple) {
               <text class="order-card-label">交付日期</text>
               <text class="order-card-value">{{ orderDetail.deliveryDate || '-' }}</text>
             </view>
-            <!-- <view class="order-card-row">
-              <text class="order-card-label">订单类型</text>
-              <text class="order-card-value">{{ orderDetail.types || '-' }}</text>
-            </view> -->
             <view v-if="orderDetail.isExpedited" class="expedited-tag">
               加急
             </view>
-          </view>
-          <!-- 右：工序节点 -->
-          <view class="order-card-divider" />
-          <view class="order-card-right">
-            <text class="node-section-title">当前工序</text>
-            <view v-if="operatorNodes.length" class="node-list">
-              <view
-                v-for="node in operatorNodes"
-                :key="node.id"
-                class="node-chip"
-                :class="{ 'node-chip--active': selectedNodeId === node.id }"
-                @tap="selectNode(node.id)"
-              >
-                <view v-if="selectedNodeId === node.id" class="i-carbon-checkmark mr-6rpx text-20rpx" />
-                <text>{{ node.name }}</text>
-              </view>
-            </view>
-            <text v-else class="node-empty">暂无工序</text>
           </view>
         </view>
       </view>
@@ -425,6 +590,27 @@ function selectUser(user: WorkshopUserSimple) {
           </view>
         </view>
       </view>
+    </view>
+  </view>
+
+  <!-- 可拖动扫码悬浮按钮 -->
+  <view
+    class="fixed z-10 h-100rpx w-100rpx flex items-center justify-center rounded-full bg-[#018d71] shadow-lg"
+    :style="btnStyle"
+    @touchstart.stop="onTouchStart"
+    @touchmove.stop.prevent="onTouchMove"
+    @touchend.stop="onTouchEnd"
+  >
+    <view class="i-carbon-scan text-48rpx text-white" />
+  </view>
+
+  <wd-message-box />
+
+  <!-- 已完成工序居中提示 -->
+  <view v-if="showCompletedTip" class="completed-tip-overlay">
+    <view class="completed-tip-box">
+      <view class="i-carbon-checkmark-filled text-72rpx text-white" />
+      <text class="completed-tip-text">已完成【{{ selectedNodeName }}】</text>
     </view>
   </view>
 
@@ -546,6 +732,56 @@ function selectUser(user: WorkshopUserSimple) {
   }
 }
 
+.process-node-wrap {
+  margin: 16rpx 24rpx 0;
+  padding: 20rpx 28rpx;
+  background-color: #fff;
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex-wrap: wrap;
+}
+
+.process-node-label {
+  font-size: 26rpx;
+  color: #333;
+  flex-shrink: 0;
+}
+
+.process-node-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  flex: 1;
+}
+
+.process-node-chip {
+  display: flex;
+  align-items: center;
+  padding: 12rpx 24rpx;
+  border-radius: 10rpx;
+  border: 2rpx solid #ccc;
+  background-color: #e0e0e0;
+  font-size: 28rpx;
+  color: #666;
+  font-weight: 500;
+
+  &--active {
+    background-color: #018d71;
+    border-color: #018d71;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 4rpx 12rpx rgba(1, 141, 113, 0.28);
+  }
+}
+
+.process-node-empty {
+  font-size: 26rpx;
+  color: #ccc;
+}
+
 .order-input-wrap {
   margin: 20rpx 24rpx 0;
 }
@@ -656,10 +892,12 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .order-card-left {
-  flex: 2;
-  padding: 28rpx 32rpx;
+  flex: 1;
+  padding: 24rpx 28rpx;
   position: relative;
-  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx 0;
 }
 
 .order-card-divider {
@@ -718,21 +956,21 @@ function selectUser(user: WorkshopUserSimple) {
 
 .order-card-row {
   display: flex;
-  align-items: center;
-  padding: 10rpx 0;
+  flex-direction: column;
+  padding: 6rpx 16rpx 6rpx 0;
+  min-width: 160rpx;
 }
 
 .order-card-label {
-  width: 140rpx;
-  font-size: 30rpx;
-  color: #333;
-  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #999;
+  margin-bottom: 4rpx;
 }
 
 .order-card-value {
-  flex: 1;
-  font-size: 32rpx;
+  font-size: 28rpx;
   color: #333;
+  font-weight: 500;
 
   &--no {
     font-size: 26rpx;
@@ -993,6 +1231,52 @@ function selectUser(user: WorkshopUserSimple) {
   justify-content: space-between;
   padding: 0 32rpx 24rpx;
   border-bottom: 1rpx solid #f0f0f0;
+}
+
+.completed-tip-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.completed-tip-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+  padding: 56rpx 80rpx;
+  background-color: rgba(1, 141, 113, 0.92);
+  border-radius: 24rpx;
+  box-shadow: 0 8rpx 40rpx rgba(1, 141, 113, 0.4);
+}
+
+.completed-tip-text {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 4rpx;
+}
+
+.node-completed-tip {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10rpx;
+  background-color: #f0faf7;
+  border-color: #018d71;
+}
+
+.node-completed-text {
+  font-size: 28rpx;
+  color: #018d71;
+  font-weight: 600;
 }
 
 .picker-item {

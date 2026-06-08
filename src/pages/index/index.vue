@@ -22,13 +22,6 @@
       <view class="i-carbon-scan text-48rpx text-white" />
     </view>
 
-    <!-- 模拟扫码按钮 -->
-    <view class="fixed bottom-200rpx left-32rpx z-10">
-      <wd-button size="small" type="warning" icon="scan" @click="handleSimulateScan">
-        模拟扫码
-      </wd-button>
-    </view>
-
     <!-- 模拟扫码输入弹窗（命令式调用，仅占位） -->
     <wd-message-box />
   </view>
@@ -137,7 +130,7 @@ function handleScanCode() {
   // #endif
 
   // #ifdef H5
-  uni.showToast({ title: '请在APP或小程序中使用扫码功能', icon: 'none' })
+  handleSimulateScan()
   // #endif
 }
 
