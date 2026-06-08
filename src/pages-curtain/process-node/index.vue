@@ -8,6 +8,7 @@ import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
 import { getBarcodeRegistry } from '@/api/curtain/barcode-registry/index'
 import { getInstallProcess } from '@/api/curtain/install-process/index'
 import { getSalesOrderDetail } from '@/api/curtain/order'
+import { createOrderProcessRecord } from '@/api/curtain/order-process-record/index'
 import { getMyProcessNodes } from '@/api/curtain/process-node/index'
 import { getWorkshopUserSimpleList } from '@/api/curtain/workshop-user/index'
 import { useDictStore, useOperatorStore } from '@/store'
@@ -66,6 +67,7 @@ function onTouchEnd() {
 const message = useMessage()
 const showCompletedTip = ref(false)
 const showWrongNodeTip = ref(false)
+const errorTipMsg = ref('')
 
 const userList = ref<WorkshopUserSimple[]>([])
 const processNodeList = ref<ProcessNodeSimple[]>([])
@@ -180,25 +182,30 @@ watch(
   { immediate: true },
 )
 
-watch(isCurrentNodeCompleted, (completed) => {
-  if (!completed)
-    return
-  const audio = uni.createInnerAudioContext()
-  audio.src = '/static/audio/completed_node.mp3'
-  audio.play()
-  showCompletedTip.value = true
-  setTimeout(() => {
-    showCompletedTip.value = false
-  }, 3000)
+// 所有条件满足（操作员+工序+结构+工序有效）时自动提交
+const readyToSubmit = computed(() => {
+  if (!selectedStructure.value || !selectedNodeId.value || !primaryOperator.value)
+    return false
+  const hasInstallProcess = !!selectedStructure.value.structure.installProcessId
+  if (!hasInstallProcess)
+    return true
+  if (!installProcess.value)
+    return false // 安装工艺加载中
+  const ids = parseNodeIds(installProcess.value.nodeIds)
+  return ids.includes(selectedNodeId.value)
+})
+
+watch(readyToSubmit, (ready) => {
+  if (ready)
+    handleCompleteProcess()
 })
 
 watch(isWrongNode, (wrong) => {
   if (!wrong)
     return
+  errorTipMsg.value = '错误的工序！'
   showWrongNodeTip.value = true
-  setTimeout(() => {
-    showWrongNodeTip.value = false
-  }, 3000)
+  setTimeout(() => { showWrongNodeTip.value = false }, 3000)
 })
 
 function selectNode(id: number) {
@@ -218,6 +225,36 @@ function selectStructure(id: number) {
   if (locateStructureId.value)
     return
   selectedStructureId.value = selectedStructureId.value === id ? null : id
+}
+
+const submitting = ref(false)
+
+async function handleCompleteProcess() {
+  if (!selectedStructure.value || !selectedNodeId.value || !primaryOperator.value || submitting.value)
+    return
+  const { curtain, structure } = selectedStructure.value
+  submitting.value = true
+  try {
+    await createOrderProcessRecord({
+      orderId: orderDetail.value!.id,
+      curtainId: curtain.id,
+      structureId: structure.id,
+      nodeId: selectedNodeId.value!,
+      masterId: primaryOperator.value!.id,
+      assistantId: secondaryOperator.value?.id,
+    })
+    const audio = uni.createInnerAudioContext()
+    audio.src = '/static/audio/completed_node.mp3'
+    audio.play()
+    showCompletedTip.value = true
+    setTimeout(() => { showCompletedTip.value = false }, 3000)
+  } catch (e: any) {
+    errorTipMsg.value = e?.msg ?? e?.message ?? '提交失败，请重试'
+    showWrongNodeTip.value = true
+    setTimeout(() => { showWrongNodeTip.value = false }, 3000)
+  } finally {
+    submitting.value = false
+  }
 }
 
 // 是否纯面料单（无成品帘工序）
@@ -622,11 +659,11 @@ function selectUser(user: WorkshopUserSimple) {
     </view>
   </view>
 
-  <!-- 错误工序居中提示 -->
+  <!-- 错误居中提示（错误工序 / 提交失败） -->
   <view v-if="showWrongNodeTip" class="completed-tip-overlay">
     <view class="wrong-node-tip-box">
       <view class="i-carbon-warning-filled text-72rpx text-white" />
-      <text class="completed-tip-text">错误的工序！</text>
+      <text class="completed-tip-text">{{ errorTipMsg || '错误的工序！' }}</text>
     </view>
   </view>
 
@@ -1327,5 +1364,29 @@ function selectUser(user: WorkshopUserSimple) {
   &--disabled {
     color: #ccc;
   }
+}
+
+.complete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  margin-top: 24rpx;
+  height: 96rpx;
+  border-radius: 16rpx;
+  background-color: #018d71;
+  color: #fff;
+  box-shadow: 0 4rpx 16rpx rgba(1, 141, 113, 0.35);
+
+  &--disabled {
+    background-color: #b2b2b2;
+    box-shadow: none;
+  }
+}
+
+.complete-btn-text {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #fff;
 }
 </style>
