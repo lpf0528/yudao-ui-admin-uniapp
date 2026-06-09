@@ -2,6 +2,7 @@
 import type { SalesOrderCurtainDetail, SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
+import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
 import { cancelPackSalesOrderCurtain, cancelShipSalesOrderCurtain, completeSalesOrder, getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain, ZcOrderStatus, ZcOrderType } from '@/api/curtain/order'
 import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
@@ -21,6 +22,7 @@ const detail = ref<SalesOrderDetail>()
 const infoExpanded = ref(false)
 const dictStore = useDictStore()
 const operatorStore = useOperatorStore()
+const message = useMessage()
 
 function requirePrimaryOperator(): boolean {
   if (operatorStore.primaryOperator)
@@ -89,54 +91,85 @@ function buildOperationReq(curtainId: number): CurtainRowOperationReq {
   }
 }
 
+async function promptCancelReason(title: string): Promise<string | null> {
+  let result: { value?: string }
+  try {
+    result = await message.prompt({
+      title,
+      msg: '请输入取消原因',
+      inputPlaceholder: '取消原因不能为空',
+    })
+  } catch {
+    return null
+  }
+  const reason = (result.value ?? '').trim()
+  if (!reason) {
+    uni.showToast({ title: '请输入取消原因', icon: 'none' })
+    return null
+  }
+  return reason
+}
+
 async function handlePack(curtain: SalesOrderCurtainDetail) {
   if (!requirePrimaryOperator())
     return
   const isPacked = !!curtain.packTime
-  confirmAction(
-    isPacked ? '确认撤销打包' : '确认打包',
-    isPacked ? '确认撤销该窗帘的打包状态？' : '确认将该窗帘标记为已打包？',
-    async () => {
+
+  if (isPacked) {
+    const reason = await promptCancelReason('撤销打包')
+    if (!reason)
+      return
+    packingId.value = curtain.id
+    try {
+      await cancelPackSalesOrderCurtain({ ...buildOperationReq(curtain.id), reason })
+      uni.showToast({ title: '撤销打包成功', icon: 'success' })
+      await loadDetail()
+    } catch {} finally {
+      packingId.value = null
+    }
+  } else {
+    confirmAction('确认打包', '确认将该窗帘标记为已打包？', async () => {
       packingId.value = curtain.id
       try {
-        if (isPacked) {
-          await cancelPackSalesOrderCurtain(buildOperationReq(curtain.id))
-          uni.showToast({ title: '撤销打包成功', icon: 'success' })
-        } else {
-          await packSalesOrderCurtain(buildOperationReq(curtain.id))
-          uni.showToast({ title: '打包成功', icon: 'success' })
-        }
+        await packSalesOrderCurtain(buildOperationReq(curtain.id))
+        uni.showToast({ title: '打包成功', icon: 'success' })
         await loadDetail()
       } catch {} finally {
         packingId.value = null
       }
-    },
-  )
+    })
+  }
 }
 
 async function handleShip(curtain: SalesOrderCurtainDetail) {
   if (!requirePrimaryOperator())
     return
   const isShipped = !!curtain.shipTime
-  confirmAction(
-    isShipped ? '确认撤销发货' : '确认发货',
-    isShipped ? '确认撤销该窗帘的发货状态？' : '确认将该窗帘标记为已发货？',
-    async () => {
+
+  if (isShipped) {
+    const reason = await promptCancelReason('撤销发货')
+    if (!reason)
+      return
+    shippingId.value = curtain.id
+    try {
+      await cancelShipSalesOrderCurtain({ ...buildOperationReq(curtain.id), reason })
+      uni.showToast({ title: '撤销发货成功', icon: 'success' })
+      await loadDetail()
+    } catch {} finally {
+      shippingId.value = null
+    }
+  } else {
+    confirmAction('确认发货', '确认将该窗帘标记为已发货？', async () => {
       shippingId.value = curtain.id
       try {
-        if (isShipped) {
-          await cancelShipSalesOrderCurtain(buildOperationReq(curtain.id))
-          uni.showToast({ title: '撤销发货成功', icon: 'success' })
-        } else {
-          await shipSalesOrderCurtain(buildOperationReq(curtain.id))
-          uni.showToast({ title: '发货成功', icon: 'success' })
-        }
+        await shipSalesOrderCurtain(buildOperationReq(curtain.id))
+        uni.showToast({ title: '发货成功', icon: 'success' })
         await loadDetail()
       } catch {} finally {
         shippingId.value = null
       }
-    },
-  )
+    })
+  }
 }
 
 const completing = ref(false)
@@ -520,6 +553,8 @@ onShow(loadDetail)
         </view>
       </view>
     </wd-popup>
+
+    <wd-message-box />
   </view>
 </template>
 
