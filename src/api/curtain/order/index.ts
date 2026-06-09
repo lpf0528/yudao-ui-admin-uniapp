@@ -154,6 +154,8 @@ export interface CutMaterialReq {
   id: number
   batchId: number
   cutQuantity: number
+  masterId: number
+  assistantId?: number
 }
 
 /** 成品订单裁剪（绑定批次、记录裁剪数量、扣减批次库存） */
@@ -172,9 +174,16 @@ export function cutFabricProduct(data: CutFabricProductReq) {
   return httpPut<boolean>('/zc/sales-order-product/cut', data)
 }
 
+/** 撤销裁剪请求 */
+export interface CancelCutMaterialReq {
+  materialId: number
+  masterId: number
+  assistantId?: number
+}
+
 /** 撤销裁剪（回退批次库存、清空配料绑定、写入撤销裁剪记录） */
-export function cancelCutMaterial(materialId: number) {
-  return httpPut<boolean>('/zc/sales-order/cancel-cut', { materialId })
+export function cancelCutMaterial(data: CancelCutMaterialReq) {
+  return httpPut<boolean>('/zc/sales-order/cancel-cut', data)
 }
 
 /** 撤销面料单产品行裁剪（回退批次库存、清空裁剪数量、写入撤销裁剪记录） */

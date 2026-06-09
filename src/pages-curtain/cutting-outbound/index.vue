@@ -9,10 +9,27 @@ import { cancelCutMaterial, cutMaterial, MAT_STATUS } from '@/api/curtain/order'
 import { getProductBatchPage } from '@/api/curtain/product'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
+import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
 const dictStore = useDictStore()
+const operatorStore = useOperatorStore()
+
+function requirePrimaryOperator(): boolean {
+  if (operatorStore.primaryOperator)
+    return true
+  uni.showModal({
+    title: '未选择主操作员',
+    content: '请先选择主操作员，是否返回首页选择？',
+    confirmText: '去选择',
+    success: (res) => {
+      if (res.confirm)
+        uni.switchTab({ url: '/pages/index/index' })
+    },
+  })
+  return false
+}
 
 function getUnitLabel(val: string) {
   return dictStore.getDictData('zc_product_unit', val)?.label ?? val ?? ''
@@ -191,6 +208,8 @@ const cutQuantity = ref<number | undefined>()
 const cutSubmitting = ref(false)
 
 function handleCutBatch(item: ZcProductBatch) {
+  if (!requirePrimaryOperator())
+    return
   cutBatch.value = item
   cutQuantity.value = matInfo.value?.quantity
   showCutPopup.value = true
@@ -214,6 +233,8 @@ async function handleCutSubmit() {
       id: matInfo.value.id,
       batchId: cutBatch.value.id,
       cutQuantity: cutQuantity.value,
+      masterId: operatorStore.primaryOperator!.id,
+      assistantId: operatorStore.secondaryOperator?.id,
     })
     uni.showToast({ title: '裁剪成功', icon: 'success' })
     handleCloseCutPopup()
@@ -249,6 +270,8 @@ const cancelSubmitting = ref(false)
 async function handleCancelCut() {
   if (!matInfo.value)
     return
+  if (!requirePrimaryOperator())
+    return
   uni.showModal({
     title: '确认撤销裁剪',
     content: '撤销后将回退批次库存并清空配料绑定，确认继续？',
@@ -257,7 +280,11 @@ async function handleCancelCut() {
         return
       cancelSubmitting.value = true
       try {
-        await cancelCutMaterial(matInfo.value.id)
+        await cancelCutMaterial({
+          materialId: matInfo.value.id,
+          masterId: operatorStore.primaryOperator!.id,
+          assistantId: operatorStore.secondaryOperator?.id,
+        })
         uni.showToast({ title: '撤销成功', icon: 'success' })
         if (matInfo.value)
           matInfo.value.status = MAT_STATUS.NOT_PEILIAO
