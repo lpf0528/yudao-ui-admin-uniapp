@@ -187,6 +187,7 @@ export interface CurtainRowOperationReq {
   id: number
   masterId: number
   assistantId?: number
+  reason?: string
 }
 
 /** 打包窗帘行（将窗帘行状态更新为已打包，并联动更新订单状态） */
