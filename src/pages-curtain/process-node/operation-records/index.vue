@@ -121,8 +121,8 @@ function handleRevoke(item: OrderProcessRecord) {
           <text v-if="item.note" class="item-note">{{ item.note }}</text>
         </view>
 
-        <!-- 右侧：撤销按钮（仅 status=1 可撤销） -->
-        <view v-if="item.status === 1" class="item-action" @tap="handleRevoke(item)">
+        <!-- 右侧：撤销按钮（status=1 且非系统分组可撤销） -->
+        <view v-if="item.status === 1 && item.nodeGroup !== 0" class="item-action" @tap="handleRevoke(item)">
           <wd-loading v-if="revoking === item.id" size="32rpx" color="#f5222d" />
           <view v-else class="i-carbon-undo text-40rpx text-[#f5222d]" />
           <text class="item-action-text">撤销</text>

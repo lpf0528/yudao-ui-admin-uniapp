@@ -26,6 +26,7 @@ export interface OrderProcessRecord {
   materialId: number
   nodeId: number
   nodeName: string
+  nodeGroup: number
   status: number
   masterId: number
   masterName: string
