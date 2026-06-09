@@ -3,6 +3,7 @@ import type { SalesOrderCurtainDetail, SalesOrderDetail, SalesOrderMaterialDetai
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import { cancelPackSalesOrderCurtain, cancelShipSalesOrderCurtain, completeSalesOrder, getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain, ZcOrderStatus, ZcOrderType } from '@/api/curtain/order'
+import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -19,6 +20,22 @@ const loading = ref(true)
 const detail = ref<SalesOrderDetail>()
 const infoExpanded = ref(false)
 const dictStore = useDictStore()
+const operatorStore = useOperatorStore()
+
+function requirePrimaryOperator(): boolean {
+  if (operatorStore.primaryOperator)
+    return true
+  uni.showModal({
+    title: '未选择主操作员',
+    content: '请先选择主操作员，是否返回首页选择？',
+    confirmText: '去选择',
+    success: (res) => {
+      if (res.confirm)
+        uni.switchTab({ url: '/pages/index/index' })
+    },
+  })
+  return false
+}
 
 function getStatusLabel(val: string) {
   return dictStore.getDictData('zc_order_status', val)?.label ?? val ?? '-'
@@ -64,7 +81,17 @@ function confirmAction(title: string, content: string, onConfirm: () => Promise<
   })
 }
 
+function buildOperationReq(curtainId: number): CurtainRowOperationReq {
+  return {
+    id: curtainId,
+    masterId: operatorStore.primaryOperator!.id,
+    assistantId: operatorStore.secondaryOperator?.id,
+  }
+}
+
 async function handlePack(curtain: SalesOrderCurtainDetail) {
+  if (!requirePrimaryOperator())
+    return
   const isPacked = !!curtain.packTime
   confirmAction(
     isPacked ? '确认撤销打包' : '确认打包',
@@ -73,10 +100,10 @@ async function handlePack(curtain: SalesOrderCurtainDetail) {
       packingId.value = curtain.id
       try {
         if (isPacked) {
-          await cancelPackSalesOrderCurtain(curtain.id)
+          await cancelPackSalesOrderCurtain(buildOperationReq(curtain.id))
           uni.showToast({ title: '撤销打包成功', icon: 'success' })
         } else {
-          await packSalesOrderCurtain(curtain.id)
+          await packSalesOrderCurtain(buildOperationReq(curtain.id))
           uni.showToast({ title: '打包成功', icon: 'success' })
         }
         await loadDetail()
@@ -88,6 +115,8 @@ async function handlePack(curtain: SalesOrderCurtainDetail) {
 }
 
 async function handleShip(curtain: SalesOrderCurtainDetail) {
+  if (!requirePrimaryOperator())
+    return
   const isShipped = !!curtain.shipTime
   confirmAction(
     isShipped ? '确认撤销发货' : '确认发货',
@@ -96,10 +125,10 @@ async function handleShip(curtain: SalesOrderCurtainDetail) {
       shippingId.value = curtain.id
       try {
         if (isShipped) {
-          await cancelShipSalesOrderCurtain(curtain.id)
+          await cancelShipSalesOrderCurtain(buildOperationReq(curtain.id))
           uni.showToast({ title: '撤销发货成功', icon: 'success' })
         } else {
-          await shipSalesOrderCurtain(curtain.id)
+          await shipSalesOrderCurtain(buildOperationReq(curtain.id))
           uni.showToast({ title: '发货成功', icon: 'success' })
         }
         await loadDetail()
