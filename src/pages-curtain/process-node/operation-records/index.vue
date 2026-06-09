@@ -8,10 +8,18 @@ definePage({
   },
 })
 
-const masterId = ref<number | null>(null)
+const filterParams = ref<{
+  orderId?: number
+  masterId?: number
+  curtainId?: number
+  structureId?: number
+  materialId?: number
+  nodeId?: number
+}>({})
+
 const records = ref<OrderProcessRecord[]>([])
 const loading = ref(false)
-const revoking = ref<number | null>(null) // 正在撤销的记录 id
+const revoking = ref<number | null>(null)
 
 function formatTime(str: string) {
   if (!str)
@@ -22,20 +30,22 @@ function formatTime(str: string) {
 async function loadRecords() {
   loading.value = true
   try {
-    records.value = await getOrderProcessRecordList({
-      masterId: masterId.value ?? undefined,
-    })
+    records.value = await getOrderProcessRecordList(filterParams.value)
   } finally {
     loading.value = false
   }
 }
 
 onLoad(async (query) => {
-  if (query?.masterId) {
-    masterId.value = Number(query.masterId)
-    if (query.masterName)
-      uni.setNavigationBarTitle({ title: `${query.masterName}的操作记录` })
+  const numFields = ['orderId', 'masterId', 'curtainId', 'structureId', 'materialId', 'nodeId'] as const
+  for (const key of numFields) {
+    if (query?.[key])
+      (filterParams.value as any)[key] = Number(query[key])
   }
+
+  if (query?.title)
+    uni.setNavigationBarTitle({ title: query.title })
+
   await loadRecords()
 })
 

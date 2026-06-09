@@ -40,6 +40,10 @@ export interface OrderProcessRecord {
 export interface OrderProcessRecordListParam {
   orderId?: number
   masterId?: number
+  curtainId?: number
+  structureId?: number
+  materialId?: number
+  nodeId?: number
 }
 
 export function getOrderProcessRecordList(params: OrderProcessRecordListParam) {

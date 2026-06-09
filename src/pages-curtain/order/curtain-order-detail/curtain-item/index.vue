@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { SalesOrderCurtainDetail } from '@/api/curtain/order'
-import type { OrderOperationLog } from '@/api/curtain/order-operation-log'
+import type { OrderProcessRecord } from '@/api/curtain/order-process-record/index'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import { getSalesOrderDetail } from '@/api/curtain/order'
-import { getOrderOperationLogPage } from '@/api/curtain/order-operation-log'
+import { getOrderProcessRecordList } from '@/api/curtain/order-process-record/index'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -25,11 +25,11 @@ const activeStructureIdx = ref(0)
 const dictStore = useDictStore()
 
 const activeTab = ref(0)
-const TAB_LABELS = ['详情', '加工流程', '操作记录']
+const TAB_LABELS = ['详情', '加工流程']
 
-const logs = ref<OrderOperationLog[]>([])
-const logsLoading = ref(false)
-const logsLoaded = ref(false)
+const processRecords = ref<OrderProcessRecord[]>([])
+const processLoading = ref(false)
+const processLoaded = ref(false)
 
 function getStatusLabel(val: string) {
   return dictStore.getDictData('zc_order_status', val)?.label ?? val ?? '-'
@@ -100,28 +100,24 @@ async function loadDetail() {
   }
 }
 
-async function loadLogs() {
-  logsLoading.value = true
+async function loadProcessRecords() {
+  processLoading.value = true
   try {
-    const res = await getOrderOperationLogPage({
-      orderId: props.orderId,
-      pageNo: '1',
-      pageSize: '200',
-      targetType: 'CURTAIN',
-      targetId: props.curtainId,
+    processRecords.value = await getOrderProcessRecordList({
+      orderId: Number(props.orderId),
+      curtainId: Number(props.curtainId),
     })
-    logs.value = res.list
-    logsLoaded.value = true
+    processLoaded.value = true
   } finally {
-    logsLoading.value = false
+    processLoading.value = false
   }
 }
 
 function switchTab(idx: number) {
   activeTab.value = idx
   uni.pageScrollTo({ scrollTop: 0, duration: 0 })
-  if (idx === 2 && !logsLoaded.value) {
-    loadLogs()
+  if (idx === 1 && !processLoaded.value) {
+    loadProcessRecords()
   }
 }
 
@@ -352,62 +348,44 @@ onShow(loadDetail)
     </view>
 
     <!-- 加工流程 tab -->
-    <view v-show="activeTab === 1" class="py-120rpx text-center">
-      <wd-status-tip image="content" tip="暂未开放" />
-    </view>
-
-    <!-- 操作记录 tab -->
-    <view v-show="activeTab === 2" class="px-24rpx pb-40rpx pt-24rpx">
-      <view v-if="logsLoading" class="flex items-center justify-center py-120rpx">
-        <wd-loading />
+    <view v-show="activeTab === 1">
+      <view v-if="processLoading" class="flex items-center justify-center py-120rpx">
+        <wd-loading color="#018d71" />
       </view>
-      <template v-else-if="logs.length">
-        <view class="log-timeline">
-          <view
-            v-for="(log, idx) in logs"
-            :key="log.id"
-            class="log-item"
-            :class="{ revoked: log.revoked }"
-          >
-            <!-- 时间轴左侧 -->
-            <view class="log-axis">
-              <view class="log-dot" />
-              <view v-if="idx < logs.length - 1" class="log-line" />
+
+      <view v-else-if="!processRecords.length" class="flex flex-col items-center justify-center py-120rpx">
+        <view class="i-carbon-document text-80rpx text-#ccc" />
+        <text class="pt-16rpx text-28rpx text-[#999]">暂无加工记录</text>
+      </view>
+
+      <view v-else class="process-list">
+        <view
+          v-for="item in processRecords"
+          :key="item.id"
+          class="process-item"
+          :class="{ 'process-item--revoked': item.status === 2 }"
+        >
+          <!-- 左侧：工序标签 -->
+          <view class="process-node">
+            <text class="process-node-text">{{ item.nodeName }}</text>
+          </view>
+
+          <!-- 中间：内容 -->
+          <view class="process-content">
+            <view class="process-top">
+              <view v-if="item.status === 2" class="process-revoked-tag">
+                已撤销
+              </view>
+              <text class="process-time">{{ formatTime(item.createTime) }}</text>
             </view>
-            <!-- 内容 -->
-            <view class="log-body">
-              <view class="log-header">
-                <view class="log-op-label">
-                  {{ log.operateTypeLabel }}
-                </view>
-                <view v-if="log.revoked" class="log-revoked-badge">
-                  已撤销
-                </view>
-              </view>
-              <view class="log-status-row">
-                <view v-if="log.beforeStatus" class="log-status before">
-                  {{ getStatusLabel(log.beforeStatus) }}
-                </view>
-                <view v-if="log.beforeStatus && log.afterStatus" class="log-arrow">
-                  →
-                </view>
-                <view v-if="log.afterStatus" class="log-status after">
-                  {{ getStatusLabel(log.afterStatus) }}
-                </view>
-              </view>
-              <view v-if="log.note" class="log-note">
-                {{ log.note }}
-              </view>
-              <view class="log-footer">
-                <text>{{ log.creator }}</text>
-                <text>{{ formatTime(log.createTime) }}</text>
-              </view>
+            <view class="process-operators">
+              <text class="process-operator-name">{{ item.masterName }}</text>
+              <text v-if="item.assistantName" class="process-operator-sep">·</text>
+              <text v-if="item.assistantName" class="process-operator-name process-operator-name--sub">{{ item.assistantName }}</text>
             </view>
+            <text v-if="item.note" class="process-note">{{ item.note }}</text>
           </view>
         </view>
-      </template>
-      <view v-else-if="!logsLoading" class="py-120rpx text-center">
-        <wd-status-tip image="content" tip="暂无记录" />
       </view>
     </view>
   </view>
@@ -672,114 +650,104 @@ onShow(loadDetail)
   color: #999;
 }
 
-/* 操作记录时间轴 */
-.log-timeline {
-  display: flex;
-  flex-direction: column;
+/* 加工流程列表 */
+.process-list {
+  padding: 16rpx 0;
 }
 
-.log-item {
+.process-item {
   display: flex;
-  gap: 20rpx;
-
-  &.revoked {
-    opacity: 0.5;
-  }
-}
-
-.log-axis {
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  flex-shrink: 0;
-  width: 24rpx;
-}
-
-.log-dot {
-  width: 20rpx;
-  height: 20rpx;
-  border-radius: 50%;
-  background-color: #1890ff;
-  flex-shrink: 0;
-  margin-top: 8rpx;
-}
-
-.log-line {
-  width: 2rpx;
-  flex: 1;
-  background-color: #e8e8e8;
-  margin: 8rpx 0;
-  min-height: 24rpx;
-}
-
-.log-body {
-  flex: 1;
   background-color: #fff;
-  border-radius: 12rpx;
-  padding: 20rpx 24rpx;
-  margin-bottom: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
-}
+  border-bottom: 1rpx solid #f0f0f0;
+  padding: 24rpx 32rpx;
+  gap: 24rpx;
 
-.log-header {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-bottom: 12rpx;
-}
+  &--revoked {
+    opacity: 0.55;
 
-.log-op-label {
-  font-size: 30rpx;
-  font-weight: 600;
-  color: #333;
-}
+    .process-node {
+      background-color: #e0e0e0;
+    }
 
-.log-revoked-badge {
-  font-size: 22rpx;
-  color: #ff4d4f;
-  background-color: #fff1f0;
-  padding: 2rpx 12rpx;
-  border-radius: 4rpx;
-}
-
-.log-status-row {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-bottom: 10rpx;
-}
-
-.log-status {
-  font-size: 24rpx;
-  padding: 4rpx 12rpx;
-  border-radius: 4rpx;
-
-  &.before {
-    background-color: #f5f5f5;
-    color: #666;
-  }
-
-  &.after {
-    background-color: #e6f7ff;
-    color: #1890ff;
+    .process-node-text {
+      color: #999;
+    }
   }
 }
 
-.log-arrow {
-  font-size: 24rpx;
-  color: #999;
+.process-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88rpx;
+  padding: 0 16rpx;
+  border-radius: 10rpx;
+  background-color: #e8f4f0;
+  flex-shrink: 0;
+  align-self: flex-start;
+  min-height: 56rpx;
 }
 
-.log-note {
+.process-node-text {
   font-size: 26rpx;
-  color: #666;
-  margin-bottom: 10rpx;
+  font-weight: 700;
+  color: #018d71;
+  white-space: nowrap;
 }
 
-.log-footer {
+.process-content {
+  flex: 1;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.process-top {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.process-revoked-tag {
+  font-size: 20rpx;
+  color: #fff;
+  background-color: #bbb;
+  padding: 2rpx 12rpx;
+  border-radius: 20rpx;
+  flex-shrink: 0;
+}
+
+.process-time {
+  font-size: 22rpx;
+  color: #bbb;
+  flex-shrink: 0;
+}
+
+.process-operators {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.process-operator-name {
+  font-size: 26rpx;
+  color: #555;
+
+  &--sub {
+    color: #999;
+  }
+}
+
+.process-operator-sep {
+  font-size: 22rpx;
+  color: #ccc;
+}
+
+.process-note {
   font-size: 24rpx;
   color: #999;
+  line-height: 1.5;
 }
 </style>
