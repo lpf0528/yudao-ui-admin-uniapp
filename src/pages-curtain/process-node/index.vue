@@ -182,30 +182,18 @@ watch(
   { immediate: true },
 )
 
-// 所有条件满足（操作员+工序+结构+工序有效）时自动提交
-const readyToSubmit = computed(() => {
-  if (!selectedStructure.value || !selectedNodeId.value || !primaryOperator.value)
-    return false
-  const hasInstallProcess = !!selectedStructure.value.structure.installProcessId
-  if (!hasInstallProcess)
-    return true
-  if (!installProcess.value)
-    return false // 安装工艺加载中
-  const ids = parseNodeIds(installProcess.value.nodeIds)
-  return ids.includes(selectedNodeId.value)
-})
-
-watch(readyToSubmit, (ready) => {
-  if (ready)
-    handleCompleteProcess()
-})
-
-watch(isWrongNode, (wrong) => {
-  if (!wrong)
+// 扫码后安装工艺异步加载完成时：校验工序并提交
+watch(installProcess, (newProcess) => {
+  if (!newProcess || !selectedNodeId.value)
     return
-  errorTipMsg.value = '错误的工序！'
-  showWrongNodeTip.value = true
-  setTimeout(() => { showWrongNodeTip.value = false }, 3000)
+  const ids = parseNodeIds(newProcess.nodeIds)
+  if (!ids.includes(selectedNodeId.value)) {
+    errorTipMsg.value = '当前窗帘不需要执行该工序'
+    showWrongNodeTip.value = true
+    setTimeout(() => { showWrongNodeTip.value = false }, 3000)
+  } else {
+    handleCompleteProcess()
+  }
 })
 
 function selectNode(id: number) {
@@ -303,6 +291,31 @@ async function processBarcodeData(codeId: string) {
           selectedStructureId.value = null
         }
       }
+      if (!selectedNodeId.value) {
+        try {
+          await message.confirm({
+            title: '请先选择当前工序',
+            msg: '您尚未选择当前工序，请在上方选择后再次扫码',
+            confirmButtonText: '知道了',
+            cancelButtonText: '取消',
+          })
+        } catch {
+          // 用户取消，无需处理
+        }
+      } else if (!selectedStructure.value?.structure.installProcessId) {
+        // 该结构无安装工艺要求，直接提交
+        handleCompleteProcess()
+      } else if (installProcess.value) {
+        // 同一结构重复扫码，installProcess 未变化，watch 不会再触发，直接校验
+        const ids = parseNodeIds(installProcess.value.nodeIds)
+        if (!ids.includes(selectedNodeId.value)) {
+          errorTipMsg.value = '当前窗帘不需要执行该工序'
+          showWrongNodeTip.value = true
+          setTimeout(() => { showWrongNodeTip.value = false }, 3000)
+        } else {
+          handleCompleteProcess()
+        }
+      }
     } else {
       uni.showToast({ title: '该码暂不支持解析', icon: 'none' })
     }
@@ -354,9 +367,20 @@ onLoad(async (query) => {
     getWorkshopUserSimpleList(),
     getMyProcessNodes(),
   ])
-  // 初始化工序选择：仅一个工序时自动选中，多个时由用户自行点选
-  if (processNodeList.value.length === 1)
+  // 初始化工序选择：仅一个工序时自动选中，多个时提醒用户选择
+  if (processNodeList.value.length === 1) {
     selectedNodeId.value = processNodeList.value[0].id
+  } else if (processNodeList.value.length > 1 && primaryOperator.value) {
+    try {
+      await message.alert({
+        title: '请先选择当前工序',
+        msg: `您有 ${processNodeList.value.length} 个工序，请在上方选择您当前正在执行的工序后再扫码`,
+        confirmButtonText: '知道了',
+      })
+    } catch {
+      // 忽略
+    }
+  }
   if (query?.orderNo) {
     orderNo.value = query.orderNo
     if (query.curtainId)
@@ -669,7 +693,7 @@ function selectUser(user: WorkshopUserSimple) {
   <view v-if="showWrongNodeTip" class="completed-tip-overlay">
     <view class="wrong-node-tip-box">
       <view class="i-carbon-warning-filled text-72rpx text-white" />
-      <text class="completed-tip-text">{{ errorTipMsg || '错误的工序！' }}</text>
+      <text class="completed-tip-text">{{ errorTipMsg || '当前窗帘不需要执行该工序' }}</text>
     </view>
   </view>
 

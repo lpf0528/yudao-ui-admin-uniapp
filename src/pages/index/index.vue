@@ -31,6 +31,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
 import { getBarcodeRegistry } from '@/api/curtain/barcode-registry/index'
+import { useOperatorStore } from '@/store'
 import MenuSection from './components/menu-section.vue'
 import UserHeader from './components/user-header.vue'
 
@@ -81,6 +82,7 @@ function onTouchEnd() {
 }
 
 const message = useMessage()
+const operatorStore = useOperatorStore()
 
 async function handleSimulateScan() {
   let result: { value?: string }
@@ -111,6 +113,10 @@ async function handleSimulateScan() {
 }
 
 function handleScanCode() {
+  if (!operatorStore.primaryOperator) {
+    uni.showToast({ title: '请先选择主操作员', icon: 'none' })
+    return
+  }
   // #ifndef H5
   uni.scanCode({
     onlyFromCamera: false,

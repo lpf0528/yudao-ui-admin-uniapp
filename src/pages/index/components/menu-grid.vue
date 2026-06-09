@@ -23,6 +23,7 @@
 <script lang="ts" setup>
 import type { MenuItem } from '../index'
 import { useToast } from 'wot-design-uni'
+import { useOperatorStore } from '@/store'
 import { isTabBarPage } from '@/tabbar/config'
 import { parseUrl, setTabParams } from '@/utils/url'
 
@@ -35,9 +36,14 @@ defineProps<{
 }>()
 
 const toast = useToast()
+const operatorStore = useOperatorStore()
 
 /** 处理菜单点击 */
 function handleClick(menu: MenuItem) {
+  if (!operatorStore.primaryOperator) {
+    uni.showToast({ title: '请先选择主操作员', icon: 'none' })
+    return
+  }
   console.log('点击菜单：', menu)
   if (!menu.url) {
     toast.show('功能开发中')

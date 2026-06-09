@@ -182,24 +182,31 @@ export function cancelCutFabricProduct(id: number) {
   return httpPut<boolean>('/zc/sales-order-product/cancel-cut', { id })
 }
 
+/** 窗帘行操作请求（打包/发货/撤销） */
+export interface CurtainRowOperationReq {
+  id: number
+  masterId: number
+  assistantId?: number
+}
+
 /** 打包窗帘行（将窗帘行状态更新为已打包，并联动更新订单状态） */
-export function packSalesOrderCurtain(id: number) {
-  return httpPut<boolean>('/zc/sales-order-curtain/pack', undefined, { id })
+export function packSalesOrderCurtain(data: CurtainRowOperationReq) {
+  return httpPut<boolean>('/zc/sales-order-curtain/pack', data)
 }
 
 /** 发货窗帘行（将窗帘行状态更新为已发货，并联动更新订单状态） */
-export function shipSalesOrderCurtain(id: number) {
-  return httpPut<boolean>('/zc/sales-order-curtain/ship', undefined, { id })
+export function shipSalesOrderCurtain(data: CurtainRowOperationReq) {
+  return httpPut<boolean>('/zc/sales-order-curtain/ship', data)
 }
 
 /** 撤销打包 */
-export function cancelPackSalesOrderCurtain(id: number) {
-  return httpPut<boolean>('/zc/sales-order-curtain/cancel-pack', undefined, { id })
+export function cancelPackSalesOrderCurtain(data: CurtainRowOperationReq) {
+  return httpPut<boolean>('/zc/sales-order-curtain/cancel-pack', data)
 }
 
 /** 撤销发货 */
-export function cancelShipSalesOrderCurtain(id: number) {
-  return httpPut<boolean>('/zc/sales-order-curtain/cancel-ship', undefined, { id })
+export function cancelShipSalesOrderCurtain(data: CurtainRowOperationReq) {
+  return httpPut<boolean>('/zc/sales-order-curtain/cancel-ship', data)
 }
 
 /** 面料单产品行 */
