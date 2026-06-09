@@ -437,20 +437,13 @@ function selectUser(user: WorkshopUserSimple) {
           </view>
         </view>
       </view>
-
-      <!-- 交货提醒 -->
-      <view v-if="deliveryStatus" class="delivery-divider" />
-      <view v-if="deliveryStatus" class="delivery-badge" :class="`delivery-badge--${deliveryStatus.level}`">
-        <view
-          class="text-36rpx"
-          :class="{
-            'i-carbon-alarm': deliveryStatus.level === 'overdue',
-            'i-carbon-warning-filled': deliveryStatus.level === 'today',
-            'i-carbon-time': deliveryStatus.level === 'soon',
-            'i-carbon-calendar': deliveryStatus.level === 'normal',
-          }"
-        />
-        <text class="delivery-text">{{ deliveryStatus.text }}</text>
+      <view class="operator-spacer" />
+      <view
+        class="record-entry"
+        @tap="primaryOperator && uni.navigateTo({ url: `/pages-curtain/process-node/operation-records/index?masterId=${primaryOperator.id}&masterName=${primaryOperator.name}` })"
+      >
+        <view class="i-carbon-list-boxes text-44rpx" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'" />
+        <text class="record-entry-label" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'">操作记录</text>
       </view>
     </view>
 
@@ -534,6 +527,19 @@ function selectUser(user: WorkshopUserSimple) {
             <view v-if="orderDetail.isExpedited" class="expedited-tag">
               加急
             </view>
+          </view>
+          <!-- 交货提醒 -->
+          <view v-if="deliveryStatus" class="delivery-badge" :class="`delivery-badge--${deliveryStatus.level}`">
+            <view
+              class="text-36rpx"
+              :class="{
+                'i-carbon-alarm': deliveryStatus.level === 'overdue',
+                'i-carbon-warning-filled': deliveryStatus.level === 'today',
+                'i-carbon-time': deliveryStatus.level === 'soon',
+                'i-carbon-calendar': deliveryStatus.level === 'normal',
+              }"
+            />
+            <text class="delivery-text">{{ deliveryStatus.text }}</text>
           </view>
         </view>
       </view>
@@ -702,12 +708,29 @@ function selectUser(user: WorkshopUserSimple) {
 
 .operator-panel {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   margin: 24rpx 24rpx 0;
   padding: 28rpx 32rpx;
   background-color: #fff;
   border-radius: 16rpx;
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.operator-spacer {
+  flex: 1;
+}
+
+.record-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 0 8rpx;
+  flex-shrink: 0;
+}
+
+.record-entry-label {
+  font-size: 22rpx;
 }
 
 .operator-item {
@@ -863,14 +886,6 @@ function selectUser(user: WorkshopUserSimple) {
 
 .content-wrap {
   padding: 24rpx;
-}
-
-.delivery-divider {
-  width: 2rpx;
-  height: 72rpx;
-  background-color: #f0f0f0;
-  margin: 0 20rpx;
-  flex-shrink: 0;
 }
 
 .delivery-badge {
