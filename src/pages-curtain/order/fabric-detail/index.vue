@@ -110,25 +110,10 @@ async function handleComplete() {
   )
 }
 
-const showPrintPopup = ref(false)
-const selectedLineIds = ref<number[]>([])
-
-function openPrintPopup() {
-  selectedLineIds.value = []
-  showPrintPopup.value = true
-}
-
-function toggleSelectAll() {
-  const allIds = materials.value.map(l => l.id)
-  selectedLineIds.value = selectedLineIds.value.length === allIds.length ? [] : [...allIds]
-}
-
-function toggleSelectLine(id: number) {
-  const idx = selectedLineIds.value.indexOf(id)
-  if (idx === -1)
-    selectedLineIds.value.push(id)
-  else
-    selectedLineIds.value.splice(idx, 1)
+function openPrintDelivery() {
+  uni.navigateTo({
+    url: `/pages-curtain/order/print-delivery/index?orderId=${encodeURIComponent(props.id)}`,
+  })
 }
 
 function goInventory(line: FabricMaterialRow) {
@@ -303,7 +288,7 @@ onShow(loadDetail)
 
       <!-- 产品明细操作区 -->
       <view class="mx-24rpx mb-0 flex items-center justify-end gap-16rpx rounded-t-12rpx bg-white px-24rpx py-16rpx">
-        <wd-button type="info" size="small" @click="openPrintPopup">
+        <wd-button type="info" size="small" @click="openPrintDelivery">
           打印发货联
         </wd-button>
         <wd-button
@@ -393,63 +378,6 @@ onShow(loadDetail)
     <view v-else class="py-120rpx text-center">
       <wd-status-tip image="content" tip="暂无数据" />
     </view>
-
-    <!-- 打印发货联弹窗 -->
-    <wd-popup v-model="showPrintPopup" position="bottom" :safe-area-inset-bottom="true" custom-style="border-radius: 24rpx 24rpx 0 0;">
-      <view class="print-popup">
-        <!-- 弹窗头部 -->
-        <view class="print-popup-header">
-          <view class="text-32rpx text-[#333] font-semibold">
-            选择打印产品
-          </view>
-          <wd-icon name="close" size="40rpx" color="#999" @click="showPrintPopup = false" />
-        </view>
-
-        <!-- 全选行 -->
-        <view class="print-select-all" @click="toggleSelectAll">
-          <view class="print-checkbox" :class="{ 'print-checkbox--checked': selectedLineIds.length > 0 && selectedLineIds.length === materials.length }">
-            <wd-icon v-if="selectedLineIds.length > 0 && selectedLineIds.length === materials.length" name="check" size="22rpx" color="#fff" />
-            <view v-else-if="selectedLineIds.length > 0" class="print-checkbox-indeterminate" />
-          </view>
-          <view class="text-30rpx text-[#333]">
-            全选
-          </view>
-          <view class="ml-auto text-26rpx text-[#999]">
-            已选 {{ selectedLineIds.length }} / {{ materials.length }}
-          </view>
-        </view>
-
-        <!-- 产品列表 -->
-        <scroll-view scroll-y class="print-popup-list">
-          <view
-            v-for="line in materials"
-            :key="line.id"
-            class="print-line-item"
-            @click="toggleSelectLine(line.id)"
-          >
-            <view class="print-checkbox" :class="{ 'print-checkbox--checked': selectedLineIds.includes(line.id) }">
-              <wd-icon v-if="selectedLineIds.includes(line.id)" name="check" size="22rpx" color="#fff" />
-            </view>
-            <view class="batch-index flex-shrink-0">
-              {{ line.curtainIndex }}
-            </view>
-            <view class="min-w-0 flex-1 truncate text-28rpx text-[#333]">
-              {{ line.productName || '-' }}
-            </view>
-            <view class="batch-status flex-shrink-0" :class="`status-${getStatusColorType(line.curtainStatus)}`">
-              {{ getStatusLabel(line.curtainStatus) }}
-            </view>
-          </view>
-        </scroll-view>
-
-        <!-- 底部按钮 -->
-        <view class="print-popup-footer">
-          <wd-button block type="primary" :disabled="!selectedLineIds.length">
-            打印（{{ selectedLineIds.length }}）
-          </wd-button>
-        </view>
-      </view>
-    </wd-popup>
   </view>
 </template>
 
@@ -662,77 +590,5 @@ onShow(loadDetail)
 .status-default {
   background-color: #f5f5f5;
   color: #999;
-}
-
-.print-popup {
-  display: flex;
-  flex-direction: column;
-  max-height: 70vh;
-}
-
-.print-popup-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 32rpx 32rpx 20rpx;
-  border-bottom: 1rpx solid #f0f0f0;
-  flex-shrink: 0;
-}
-
-.print-select-all {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  padding: 24rpx 32rpx;
-  background-color: #fafafa;
-  border-bottom: 1rpx solid #f0f0f0;
-  flex-shrink: 0;
-}
-
-.print-popup-list {
-  flex: 1;
-  overflow: hidden;
-}
-
-.print-line-item {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  padding: 24rpx 32rpx;
-  border-bottom: 1rpx solid #f5f5f5;
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.print-checkbox {
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 8rpx;
-  border: 2rpx solid #d9d9d9;
-  background-color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-
-  &--checked {
-    background-color: #1890ff;
-    border-color: #1890ff;
-  }
-}
-
-.print-checkbox-indeterminate {
-  width: 20rpx;
-  height: 4rpx;
-  background-color: #1890ff;
-  border-radius: 2rpx;
-}
-
-.print-popup-footer {
-  padding: 24rpx 32rpx;
-  border-top: 1rpx solid #f0f0f0;
-  flex-shrink: 0;
 }
 </style>
