@@ -1,4 +1,4 @@
-import { httpGet } from '@/http/http'
+import { httpGet, httpPost } from '@/http/http'
 
 export interface BarcodeRegistryVO {
   id: number
@@ -11,4 +11,14 @@ export interface BarcodeRegistryVO {
 
 export function getBarcodeRegistry(codeId: string) {
   return httpGet<BarcodeRegistryVO>('/zc/barcode-registry/get', { codeId })
+}
+
+export interface BarcodeRegistryCreateReq {
+  codeType: string
+  targetRoute: string
+  codeContent: Record<string, any>
+}
+
+export function createBarcodeRegistry(data: BarcodeRegistryCreateReq) {
+  return httpPost<string>('/zc/barcode-registry/create', data)
 }

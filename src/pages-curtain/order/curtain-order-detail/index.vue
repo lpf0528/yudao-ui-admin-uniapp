@@ -3,6 +3,7 @@ import type { SalesOrderCurtainDetail, SalesOrderDetail, SalesOrderMaterialDetai
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
 import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
+import { createBarcodeRegistry } from '@/api/curtain/barcode-registry'
 import { cancelPackSalesOrderCurtain, cancelShipSalesOrderCurtain, completeSalesOrder, getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain, ZcOrderStatus, ZcOrderType } from '@/api/curtain/order'
 import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
@@ -133,8 +134,19 @@ async function handlePack(curtain: SalesOrderCurtainDetail) {
       try {
         await packSalesOrderCurtain(buildOperationReq(curtain.id))
         uni.showToast({ title: '打包成功', icon: 'success' })
+        const code = await createBarcodeRegistry({
+          codeType: 'CURTAIN_QR',
+          targetRoute: '/pages-curtain/order/curtain-order-detail/curtain-item/index',
+          codeContent: { orderId: Number(props.id), curtainId: curtain.id },
+        })
+        const curtainIdx = (detail.value?.curtains.findIndex(c => c.id === curtain.id) ?? 0) + 1
+        const totalSets = detail.value?.curtains.length ?? 0
+        uni.navigateTo({
+          url: `/pages-curtain/order/curtain-order-detail/print-curtain-tag/index?code=${encodeURIComponent(code)}&orderNo=${encodeURIComponent(detail.value?.orderNo ?? '')}&customerName=${encodeURIComponent(detail.value?.customerName ?? '')}&receiver=${encodeURIComponent(detail.value?.receiver ?? '')}&orderDate=${encodeURIComponent(detail.value?.orderDate ?? '')}&curtainIndex=${curtainIdx}&totalSets=${totalSets}&orderId=${props.id}&curtainId=${curtain.id}`,
+        })
+      } catch {
         await loadDetail()
-      } catch {} finally {
+      } finally {
         packingId.value = null
       }
     })

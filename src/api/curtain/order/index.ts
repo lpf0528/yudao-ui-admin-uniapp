@@ -89,6 +89,7 @@ export interface SalesOrderMaterialDetail {
   productName: string
   batchNo: string
   barcode: string
+  elementIsPrint: boolean
 }
 
 /** 结构行详情 */

@@ -104,6 +104,10 @@ http.get<MyType>('/curtain/order/page', params)
 
 ### 打印插件（sunmi-printersdk）
 
+> **触发规则**：当用户说"添加打印页面"或"实现打印功能"时，**必须先读取 `.claude/skills/print-label.md`**，按照其中的实现模式执行。
+
+
+
 `src/uni_modules/sunmi-printersdk/` — 商米打印机 SDK，**仅 APP-PLUS 环境可用**，需用 `// #ifdef APP-PLUS` 条件编译包裹。
 
 | API 类 | 适用场景 |
