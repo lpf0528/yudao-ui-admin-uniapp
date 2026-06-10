@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// #endif
 import type { SalesOrderCurtainDetail } from '@/api/curtain/order'
 import qrcode from 'qrcode-generator'
 import { getCurrentInstance, nextTick, onMounted, ref } from 'vue'
@@ -8,6 +7,7 @@ import { useDictStore } from '@/store/dict'
 // #ifdef APP-PLUS
 import { LineApi, PrinterSdk } from '@/uni_modules/sunmi-printersdk'
 import { navigateBackPlus } from '@/utils'
+// #endif
 
 definePage({
   style: {
@@ -40,9 +40,17 @@ function getUnitLabel(val: string) {
   return dictStore.getDictData('zc_product_unit', val)?.label ?? val ?? ''
 }
 
+function safe(val: string | null | undefined): string {
+  if (!val || val === 'null' || val === 'undefined')
+    return ''
+  return val
+}
+
 function calculateCanvasHeight(): number {
-  // header: 28 + 4×36 (text lines) + 32 (套数 line) + 12 (divider1) = 216
-  let ty = 28 + 36 * 4 + 32 + 12
+  // header: 22 + 4×26 (text lines) + [curtainName] + 24 (套数) + 10 (divider1)
+  let ty = 22 + 26 * 4 + 24 + 10
+  if (safe(curtainDetail.value?.curtainName))
+    ty += 26
 
   let hasContent = false
   for (const s of curtainDetail.value?.structures ?? []) {
@@ -50,15 +58,15 @@ function calculateCanvasHeight(): number {
     if (!printMats.length)
       continue
     hasContent = true
-    ty += 26 // structure name line
-    ty += printMats.length * 26 // material lines
-    ty += 6 // gap after each structure
+    ty += 22 // structure name line
+    ty += printMats.length * 20 // material lines
+    ty += 4 // gap after each structure
   }
   if (hasContent)
-    ty += 12 // divider2
+    ty += 10 // divider2
 
-  ty += QR_SIZE + 20 // QR + bottom padding
-  return Math.max(ty, 400)
+  ty += QR_SIZE + 16 // QR + bottom padding
+  return Math.max(ty, 380)
 }
 
 function drawLabel() {
@@ -71,19 +79,24 @@ function drawLabel() {
   ctx.fillRect(0, 0, CANVAS_W, canvasHeight.value)
 
   const tx = 16
-  let ty = 28
-  const lh = 36
+  let ty = 22
+  const lh = 26
 
   ctx.setFillStyle('#000000')
-  ctx.setFontSize(20)
-  ctx.fillText(`订单编号：${orderNo.value}`, tx, ty); ty += lh
-  ctx.fillText(`客户名称：${customerName.value || '-'}`, tx, ty); ty += lh
-  ctx.fillText(`收货人：${receiver.value || '-'}`, tx, ty); ty += lh
-  ctx.fillText(`下单日期：${orderDate.value || '-'}`, tx, ty); ty += lh
+  ctx.setFontSize(16)
+  ctx.fillText(`订单编号：${safe(orderNo.value) || '-'}`, tx, ty); ty += lh
+  ctx.fillText(`客户名称：${safe(customerName.value) || '-'}`, tx, ty); ty += lh
+  ctx.fillText(`收货人：${safe(receiver.value) || '-'}`, tx, ty); ty += lh
+  ctx.fillText(`下单日期：${safe(orderDate.value) || '-'}`, tx, ty); ty += lh
 
-  ctx.setFontSize(24)
+  const curtainName = safe(curtainDetail.value?.curtainName)
+  if (curtainName) {
+    ctx.fillText(`窗帘名称：${curtainName}`, tx, ty); ty += lh
+  }
+
+  ctx.setFontSize(18)
   ctx.fillText(`第 ${curtainIndex.value} 套 / 共 ${totalSets.value} 套`, tx, ty)
-  ty += 32
+  ty += 24
 
   // 分割线 1
   ctx.setStrokeStyle('#dddddd')
@@ -92,7 +105,7 @@ function drawLabel() {
   ctx.moveTo(16, ty)
   ctx.lineTo(CANVAS_W - 16, ty)
   ctx.stroke()
-  ty += 12
+  ty += 10
 
   // 结构 + 用料（仅 elementIsPrint=true）
   let hasDrawnMats = false
@@ -103,18 +116,19 @@ function drawLabel() {
 
     hasDrawnMats = true
 
-    ctx.setFontSize(18)
+    ctx.setFontSize(14)
     ctx.setFillStyle('#333333')
-    ctx.fillText(structure.structureName || '-', tx, ty)
-    ty += 26
+    ctx.fillText(safe(structure.structureName) || '-', tx, ty)
+    ty += 22
 
-    ctx.setFontSize(15)
+    ctx.setFontSize(12)
     ctx.setFillStyle('#555555')
     for (const mat of printMats) {
-      ctx.fillText(`· ${mat.elementName}/${mat.productName}  ${mat.quantity}${getUnitLabel(mat.unitValue)}`, tx, ty)
-      ty += 26
+      const name = `${safe(mat.elementName) || ''}/${safe(mat.productName) || ''}`
+      ctx.fillText(`· ${name}  ${mat.quantity ?? 0}${getUnitLabel(mat.unitValue)}`, tx, ty)
+      ty += 20
     }
-    ty += 6
+    ty += 4
   }
 
   if (hasDrawnMats) {
@@ -125,7 +139,7 @@ function drawLabel() {
     ctx.moveTo(16, ty)
     ctx.lineTo(CANVAS_W - 16, ty)
     ctx.stroke()
-    ty += 12
+    ty += 10
   }
 
   // 二维码（居中）
