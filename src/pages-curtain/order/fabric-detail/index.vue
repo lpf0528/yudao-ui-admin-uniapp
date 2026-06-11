@@ -2,7 +2,9 @@
 import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
 import { computed, ref } from 'vue'
+import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
 import { cancelShipSalesOrderCurtain, completeSalesOrder, getSalesOrderDetail, shipSalesOrderCurtain, ZcOrderStatus } from '@/api/curtain/order'
+import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
 
@@ -41,6 +43,50 @@ const materials = computed<FabricMaterialRow[]>(() =>
 const infoExpanded = ref(false)
 const shippingId = ref<number | null>(null)
 const dictStore = useDictStore()
+const operatorStore = useOperatorStore()
+const message = useMessage()
+
+function requirePrimaryOperator(): boolean {
+  if (operatorStore.primaryOperator)
+    return true
+  uni.showModal({
+    title: '未选择主操作员',
+    content: '请先选择主操作员，是否返回首页选择？',
+    confirmText: '去选择',
+    success: (res) => {
+      if (res.confirm)
+        uni.switchTab({ url: '/pages/index/index' })
+    },
+  })
+  return false
+}
+
+function buildOperationReq(curtainId: number) {
+  return {
+    id: curtainId,
+    masterId: operatorStore.primaryOperator!.id,
+    assistantId: operatorStore.secondaryOperator?.id,
+  }
+}
+
+async function promptCancelReason(title: string): Promise<string | null> {
+  let result: { value?: string }
+  try {
+    result = await message.prompt({
+      title,
+      msg: '请输入取消原因',
+      inputPlaceholder: '取消原因不能为空',
+    })
+  } catch {
+    return null
+  }
+  const reason = (result.value ?? '').trim()
+  if (!reason) {
+    uni.showToast({ title: '请输入取消原因', icon: 'none' })
+    return null
+  }
+  return reason
+}
 
 function confirmAction(title: string, content: string, onConfirm: () => Promise<void>) {
   uni.showModal({
@@ -53,26 +99,35 @@ function confirmAction(title: string, content: string, onConfirm: () => Promise<
   })
 }
 
-function handleShip(line: FabricMaterialRow) {
+async function handleShip(line: FabricMaterialRow) {
+  if (!requirePrimaryOperator())
+    return
   const isShipped = !!line.curtainShipTime
-  confirmAction(
-    isShipped ? '确认撤销发货' : '确认发货',
-    isShipped ? `确认撤销"${line.productName}"的发货状态？` : `确认将"${line.productName}"标记为已发货？`,
-    async () => {
+
+  if (isShipped) {
+    const reason = await promptCancelReason('撤销发货')
+    if (!reason)
+      return
+    shippingId.value = line.curtainId
+    try {
+      await cancelShipSalesOrderCurtain({ ...buildOperationReq(line.curtainId), reason })
+      uni.showToast({ title: '撤销发货成功', icon: 'success' })
+      await loadDetail()
+    } catch {} finally {
+      shippingId.value = null
+    }
+  } else {
+    confirmAction('确认发货', `确认将"${line.productName}"标记为已发货？`, async () => {
       shippingId.value = line.curtainId
       try {
-        if (isShipped) {
-          await cancelShipSalesOrderCurtain(line.curtainId)
-        } else {
-          await shipSalesOrderCurtain(line.curtainId)
-        }
-        uni.showToast({ title: isShipped ? '撤销发货成功' : '发货成功', icon: 'success' })
+        await shipSalesOrderCurtain(buildOperationReq(line.curtainId))
+        uni.showToast({ title: '发货成功', icon: 'success' })
         await loadDetail()
       } catch {} finally {
         shippingId.value = null
       }
-    },
-  )
+    })
+  }
 }
 
 function getStatusLabel(val: string) {
@@ -378,6 +433,8 @@ onShow(loadDetail)
     <view v-else class="py-120rpx text-center">
       <wd-status-tip image="content" tip="暂无数据" />
     </view>
+
+    <wd-message-box />
   </view>
 </template>
 
