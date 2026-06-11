@@ -13,19 +13,22 @@ definePage({
   },
 })
 
-// Label canvas: 300×480px maps to 40×64mm (approx)
+// Label canvas: 300×420px maps to 50×70mm (approx)
 const CANVAS_W = 300
-const CANVAS_H = 480
-const QR_DRAW_SIZE = 128 // QR code: half size, centered
-const QR_X = (CANVAS_W - QR_DRAW_SIZE) / 2 // 86
-const QR_Y = 20
+const CANVAS_H = 420
+const QR_DRAW_SIZE = 110
+const QR_X = (CANVAS_W - QR_DRAW_SIZE) / 2
+const QR_Y = 12
 
 const instance = getCurrentInstance()
 
 const batchNo = ref('')
+const qrCode = ref('')
 const productName = ref('')
+const warehouse = ref('')
 const versionName = ref('')
 const specValue = ref('')
+const quantity = ref('')
 const note = ref('')
 const drawn = ref(false)
 const saving = ref(false)
@@ -65,7 +68,7 @@ function drawLabel() {
 
   // QR code
   const qr = qrcode(0, 'M')
-  qr.addData(batchNo.value)
+  qr.addData(qrCode.value || batchNo.value)
   qr.make()
   const count = qr.getModuleCount()
   const cell = QR_DRAW_SIZE / count
@@ -89,13 +92,17 @@ function drawLabel() {
   // Text
   ctx.setFillStyle('#000000')
   const tx = 16
-  let ty = lineY + 32
-  const lh = 38
+  let ty = lineY + 28
+  const lh = 34
 
-  ctx.setFontSize(22)
+  ctx.setFontSize(20)
   ctx.fillText(`批次：${batchNo.value}`, tx, ty)
   ty += lh
   ctx.fillText(`产品：${productName.value || '-'}`, tx, ty)
+  if (warehouse.value) {
+    ty += lh
+    ctx.fillText(`仓库：${warehouse.value}`, tx, ty)
+  }
   if (versionName.value) {
     ty += lh
     ctx.fillText(`版本：${versionName.value}`, tx, ty)
@@ -104,9 +111,10 @@ function drawLabel() {
     ty += lh
     ctx.fillText(`规格：${specValue.value}`, tx, ty)
   }
+  ty += lh
+  ctx.fillText(`剩余数量：${quantity.value || '-'}`, tx, ty)
   if (note.value) {
     ty += lh
-    // first line: "备注：" prefix takes ~6 half-width units (3 CJK), rest ≈ 18; continuation ≈ 24
     const noteLines = splitLines(note.value, 18, 24)
     ctx.fillText(`备注：${noteLines[0]}`, tx, ty)
     for (let i = 1; i < noteLines.length; i++) {
@@ -166,9 +174,9 @@ function handlePrint() {
 // #endif
 
 // #ifdef APP-PLUS
-// 58mm 打印机：203 DPI，384 点宽
-const PRINT_WIDTH = 384
-const PRINT_HEIGHT = Math.round(PRINT_WIDTH * (CANVAS_H / CANVAS_W))
+// 50×70mm 标签：203 DPI，400×560 点
+const PRINT_WIDTH = 400
+const PRINT_HEIGHT = 560
 
 let printerReady = false
 
@@ -272,9 +280,12 @@ onMounted(() => {
   const cur = pages[pages.length - 1] as any
   const opts = cur.$page?.options ?? cur.options ?? {}
   batchNo.value = decodeURIComponent(opts.batchNo ?? '')
+  qrCode.value = decodeURIComponent(opts.qrCode ?? '')
   productName.value = decodeURIComponent(opts.productName ?? '')
+  warehouse.value = decodeURIComponent(opts.warehouse ?? '')
   versionName.value = decodeURIComponent(opts.versionName ?? '')
   specValue.value = decodeURIComponent(opts.specValue ?? '')
+  quantity.value = decodeURIComponent(opts.quantity ?? '')
   note.value = decodeURIComponent(opts.note ?? '')
   setTimeout(drawLabel, 100)
 })

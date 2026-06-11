@@ -5,6 +5,7 @@ import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
 import { onReachBottom } from '@dcloudio/uni-app'
 import { onMounted, ref } from 'vue'
+import { createBarcodeRegistry } from '@/api/curtain/barcode-registry'
 import { createInventoryRecord } from '@/api/curtain/inventory-record'
 import { getProductBatchPage } from '@/api/curtain/product'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
@@ -165,15 +166,30 @@ function handleViewCuttingRecords(item: ZcProductBatch) {
   })
 }
 
-function handlePrintLabel(item: ZcProductBatch) {
-  const enc = encodeURIComponent
-  const query = `batchId=${item.id}`
-    + `&batchNo=${enc(item.batchNo || String(item.id))}`
-    + `&productName=${enc(item.productName || '')}`
-    + `&versionName=${enc(item.versionName || '')}`
-    + `&specValue=${enc(item.specValue || '')}`
-    + `&note=${enc(item.note || '')}`
-  uni.navigateTo({ url: `/pages-curtain/product-inbound/print-label/index?${query}` })
+async function handlePrintLabel(item: ZcProductBatch) {
+  uni.showLoading({ title: '生成二维码…', mask: true })
+  try {
+    const codeId = await createBarcodeRegistry({
+      codeType: 'BATCH_QR',
+      targetRoute: '/pages-curtain/product-inbound/inventory/index',
+      codeContent: { productId: item.productId, batchId: item.id },
+    })
+    const enc = encodeURIComponent
+    const query = `batchId=${item.id}`
+      + `&batchNo=${enc(item.batchNo || String(item.id))}`
+      + `&qrCode=${enc(codeId)}`
+      + `&productName=${enc(item.productName || '')}`
+      + `&warehouse=${enc(item.warehouseName || '')}`
+      + `&versionName=${enc(item.versionName || '')}`
+      + `&specValue=${enc(item.specValue || '')}`
+      + `&quantity=${enc(String(item.quantity ?? ''))}`
+      + `&note=${enc(item.note || '')}`
+    uni.navigateTo({ url: `/pages-curtain/product-inbound/print-label/index?${query}` })
+  } catch {
+    uni.showToast({ title: '生成二维码失败，请重试', icon: 'none' })
+  } finally {
+    uni.hideLoading()
+  }
 }
 
 onReachBottom(() => { loadMore() })
