@@ -8,7 +8,14 @@ import { onMounted, ref } from 'vue'
 import { createProductBatchList, getProductPage } from '@/api/curtain/product'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
+import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
+
+const dictStore = useDictStore()
+
+function getUnitLabel(val: string) {
+  return dictStore.getDictData('zc_product_unit', val)?.label ?? val ?? '-'
+}
 
 definePage({
   style: {
@@ -241,7 +248,7 @@ onMounted(() => {
                 单位:
               </view>
               <view class="value">
-                {{ item.unitValue || '-' }}
+                {{ getUnitLabel(item.unitValue) }}
               </view>
             </view>
           </view>
@@ -297,7 +304,7 @@ onMounted(() => {
             </view>
             <view class="meta-item">
               <text class="meta-label">单位</text>
-              <text class="meta-value">{{ currentProduct.unitValue || '-' }}</text>
+              <text class="meta-value">{{ getUnitLabel(currentProduct.unitValue) }}</text>
             </view>
           </view>
         </view>
