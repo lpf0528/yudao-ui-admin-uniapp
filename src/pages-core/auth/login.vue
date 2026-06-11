@@ -39,42 +39,13 @@
       </view>
 
       <!-- 登录按钮 -->
-      <view class="mb-2 mt-2 flex justify-between">
-        <text class="text-28rpx text-[#1890ff]" @click="goToSmsLogin">
-          验证码登录
-        </text>
-        <text class="text-28rpx text-[#1890ff]" @click="goToForgetPassword">
-          忘记密码？
-        </text>
-      </view>
       <wd-button block :loading="loading" type="primary" @click="handleLogin">
         登录
       </wd-button>
 
       <!-- 第三方登录 -->
-      <view class="mt-100rpx">
-        <view class="divider mb-40rpx flex items-center justify-center">
-          <view class="h-1rpx flex-1 bg-[#e5e5e5]" />
-          <text class="px-24rpx text-26rpx text-[#999]">其他登录方式</text>
-          <view class="h-1rpx flex-1 bg-[#e5e5e5]" />
-        </view>
-        <!-- TODO @芋艿：图标换下！ -->
-        <view class="icons flex justify-center gap-60rpx">
-          <view class="icon-item" @click="handleWechatLogin">
-            <wd-icon name="chat" size="24px" color="#07c160" />
-          </view>
-          <view class="icon-item" @click="handleDingTalkLogin">
-            <wd-icon name="computer" size="24px" color="#3370ff" />
-          </view>
-        </view>
-      </view>
+
       <!-- 创建账号 -->
-      <view class="mt-40rpx flex items-center justify-center">
-        <text class="text-28rpx text-[#666]">还没有账号？</text>
-        <text class="text-28rpx text-[#1890ff]" @click="goToRegister">
-          创建账号
-        </text>
-      </view>
     </view>
   </view>
 </template>
