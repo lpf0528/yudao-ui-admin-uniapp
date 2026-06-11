@@ -80,7 +80,7 @@ definePage({
 const toast = useToast()
 const loading = ref(false) // 加载状态
 const redirectUrl = ref<string>() // 重定向地址
-const tenantPickerRef = ref<InstanceType<typeof TenantPicker>>() // 租户选择器引用
+const tenantPickerRef = ref<InstanceType<typeof TenantPicker>>()
 const captchaEnabled = import.meta.env.VITE_APP_CAPTCHA_ENABLE === 'true' // 验证码开关
 const verifyRef = ref()
 const captchaType = ref('blockPuzzle') // 滑块验证码 blockPuzzle|clickWord
@@ -112,7 +112,7 @@ async function getCode() {
 
 /** 登录处理 */
 async function handleLogin() {
-  if (!tenantPickerRef.value?.validate()) {
+  if (!(await tenantPickerRef.value?.validate())) {
     return
   }
   if (!formData.username) {

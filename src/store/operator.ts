@@ -16,7 +16,12 @@ export const useOperatorStore = defineStore(
       secondaryOperator.value = user
     }
 
-    return { primaryOperator, secondaryOperator, setPrimary, setSecondary }
+    const clear = () => {
+      primaryOperator.value = null
+      secondaryOperator.value = null
+    }
+
+    return { primaryOperator, secondaryOperator, setPrimary, setSecondary, clear }
   },
   {
     persist: true,

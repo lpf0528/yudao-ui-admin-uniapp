@@ -102,6 +102,11 @@ export function getTenantByWebsite(website: string) {
   return http.get<TenantVO>(`/system/tenant/get-by-website?website=${website}`)
 }
 
+/** 根据租户名称获取租户编号 */
+export function getTenantIdByName(name: string) {
+  return http.get<number>('/system/tenant/get-id-by-name', { name })
+}
+
 /** 通过短信重置密码 */
 export function smsResetPassword(data: AuthResetPasswordReqVO) {
   return http.post<boolean>('/system/auth/reset-password', data)

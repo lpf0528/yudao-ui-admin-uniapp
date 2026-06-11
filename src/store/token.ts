@@ -21,6 +21,7 @@ import {
 import { isDoubleTokenRes, isSingleTokenRes } from '@/api/types/login'
 import { isDoubleTokenMode } from '@/utils'
 import { useDictStore } from './dict'
+import { useOperatorStore } from './operator'
 import { useUserStore } from './user'
 
 // 初始化状态
@@ -218,6 +219,9 @@ export const useTokenStore = defineStore(
         // add by 芋艿：清空字典缓存
         const dictStore = useDictStore()
         dictStore.clearDictCache()
+        // 清空操作员缓存
+        const operatorStore = useOperatorStore()
+        operatorStore.clear()
       }
     }
 
