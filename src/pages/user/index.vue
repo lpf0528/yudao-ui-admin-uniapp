@@ -29,40 +29,6 @@
 
     <!-- 菜单区域 -->
     <view class="mx-24rpx mt-32rpx">
-      <wd-cell-group custom-class="menu-group" border>
-        <wd-cell title="个人资料" is-link @click="handleGoProfile">
-          <template #icon>
-            <wd-icon name="user" size="20px" color="#1890ff" class="mr-16rpx" />
-          </template>
-        </wd-cell>
-        <wd-cell title="账号安全" is-link @click="handleGoSecurity">
-          <template #icon>
-            <wd-icon name="lock-on" size="20px" color="#52c41a" class="mr-16rpx" />
-          </template>
-        </wd-cell>
-      </wd-cell-group>
-      <wd-cell-group custom-class="menu-group mt-24rpx" border>
-        <wd-cell title="常见问题" is-link @click="handleGoFaq">
-          <template #icon>
-            <wd-icon name="warning" size="20px" color="#faad14" class="mr-16rpx" />
-          </template>
-        </wd-cell>
-        <wd-cell title="意见反馈" is-link @click="handleGoFeedback">
-          <template #icon>
-            <wd-icon name="edit" size="20px" color="#722ed1" class="mr-16rpx" />
-          </template>
-        </wd-cell>
-        <wd-cell title="联系客服" is-link @click="handleGoContact">
-          <template #icon>
-            <wd-icon name="phone" size="20px" color="#13c2c2" class="mr-16rpx" />
-          </template>
-        </wd-cell>
-        <wd-cell title="应用设置" is-link @click="handleGoSettings">
-          <template #icon>
-            <wd-icon name="setting" size="20px" color="#1890ff" class="mr-16rpx" />
-          </template>
-        </wd-cell>
-      </wd-cell-group>
       <view class="mt-48rpx">
         <wd-button block type="error" @click="handleLogout">
           退出登录
