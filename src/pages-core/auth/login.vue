@@ -27,6 +27,13 @@
           no-border
         />
       </view>
+      <!-- 记住我 -->
+      <view class="remember-row">
+        <wd-checkbox v-model="rememberMe" shape="square">
+          记住我
+        </wd-checkbox>
+      </view>
+
       <view v-if="captchaEnabled">
         <Verify
           ref="verifyRef"
@@ -51,7 +58,7 @@
 </template>
 
 <script lang="ts" setup>
-import { reactive, ref } from 'vue'
+import { nextTick, reactive, ref } from 'vue'
 import { useToast } from 'wot-design-uni'
 import {
   CODE_LOGIN_PAGE,
@@ -77,24 +84,38 @@ definePage({
   },
 })
 
+const REMEMBER_KEY = 'loginRemember'
+
 const toast = useToast()
-const loading = ref(false) // 加载状态
-const redirectUrl = ref<string>() // 重定向地址
+const loading = ref(false)
+const redirectUrl = ref<string>()
 const tenantPickerRef = ref<InstanceType<typeof TenantPicker>>()
-const captchaEnabled = import.meta.env.VITE_APP_CAPTCHA_ENABLE === 'true' // 验证码开关
+const captchaEnabled = import.meta.env.VITE_APP_CAPTCHA_ENABLE === 'true'
 const verifyRef = ref()
-const captchaType = ref('blockPuzzle') // 滑块验证码 blockPuzzle|clickWord
+const captchaType = ref('blockPuzzle')
+const rememberMe = ref(false)
 
 const formData = reactive({
   username: import.meta.env.VITE_APP_DEFAULT_LOGIN_USERNAME || '',
   password: import.meta.env.VITE_APP_DEFAULT_LOGIN_PASSWORD || '',
-  captchaVerification: '', // 验证码校验值
-}) // 表单数据
+  captchaVerification: '',
+})
 
-/** 页面加载时处理重定向 */
+/** 页面加载时处理重定向，并回填记住的账号密码 */
 onLoad((options) => {
   if (options?.redirect) {
     redirectUrl.value = ensureDecodeURIComponent(options.redirect)
+  }
+  const saved = uni.getStorageSync(REMEMBER_KEY)
+  if (saved) {
+    formData.username = saved.username
+    formData.password = saved.password
+    rememberMe.value = true
+    nextTick(() => {
+      if (tenantPickerRef.value && saved.tenantName) {
+        tenantPickerRef.value.tenantName = saved.tenantName
+      }
+    })
   }
 })
 
@@ -136,6 +157,16 @@ async function verifySuccess(params: any) {
       type: 'username',
       ...formData,
     })
+    // 保存或清除记住我的凭据
+    if (rememberMe.value) {
+      uni.setStorageSync(REMEMBER_KEY, {
+        username: formData.username,
+        password: formData.password,
+        tenantName: tenantPickerRef.value?.tenantName || '',
+      })
+    } else {
+      uni.removeStorageSync(REMEMBER_KEY)
+    }
     // 处理跳转
     redirectAfterLogin(redirectUrl.value)
   } finally {
@@ -173,6 +204,12 @@ function handleDingTalkLogin() {
 
 <style lang="scss" scoped>
 @import './styles/auth.scss';
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 0 16rpx;
+}
 
 // 第三方登录图标
 .icon-item {

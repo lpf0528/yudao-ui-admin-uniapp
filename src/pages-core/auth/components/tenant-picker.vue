@@ -45,7 +45,7 @@ async function validate(): Promise<boolean> {
   }
 }
 
-defineExpose({ validate })
+defineExpose({ validate, tenantName })
 </script>
 
 <style lang="scss" scoped>
