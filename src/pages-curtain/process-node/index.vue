@@ -267,6 +267,20 @@ async function handleOrderSearch() {
   }
 }
 
+const UUID_REGEX = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
+
+async function handleInputConfirm() {
+  const val = orderNo.value.trim()
+  if (!val)
+    return
+  if (UUID_REGEX.test(val)) {
+    orderNo.value = ''
+    await processBarcodeData(val)
+  } else {
+    await handleOrderSearch()
+  }
+}
+
 async function processBarcodeData(codeId: string) {
   try {
     const data = await getBarcodeRegistry(codeId)
@@ -496,10 +510,10 @@ function selectUser(user: WorkshopUserSimple) {
         <input
           v-model="orderNo"
           class="order-input"
-          placeholder=""
+          placeholder="扫码或输入订单号"
           placeholder-style="color:#bbb"
-          confirm-type="search" disabled
-          @confirm="handleOrderSearch"
+          confirm-type="search"
+          @confirm="handleInputConfirm"
         >
         <!-- <view
           v-if="orderNo"
