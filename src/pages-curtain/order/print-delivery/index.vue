@@ -93,7 +93,7 @@ async function handlePrintApp() {
     LineApi.initLine({ align: 2, width: 456, height: 0, renderColor: 0, posX: 0 })
     LineApi.printText('发货联', makeTextStyle(2, 32))
     LineApi.printDividingLine(1, 2)
-    const left = makeTextStyle(1, 24)
+    const left = makeTextStyle(1, 28)
     LineApi.printText(`订单号：${d.orderNo}`, left)
     LineApi.printText(`客户名称：${d.customerName || '-'}`, left)
     LineApi.printText(`收货人：${d.receiver || '-'}`, left)
@@ -249,7 +249,7 @@ async function handlePrintApp() {
 .slip-container {
   display: flex;
   justify-content: center;
-  padding: 32rpx 24rpx;
+  padding: 48rpx 32rpx 32rpx;
 }
 
 .slip {
@@ -273,7 +273,7 @@ async function handlePrintApp() {
 
 .slip-title {
   text-align: center;
-  font-size: 34rpx;
+  font-size: 40rpx;
   font-weight: 700;
   color: #111;
   letter-spacing: 6rpx;
@@ -301,24 +301,24 @@ async function handlePrintApp() {
   display: flex;
   align-items: flex-start;
   gap: 12rpx;
-  margin-bottom: 14rpx;
+  margin-bottom: 18rpx;
 }
 
 .slip-label {
   flex-shrink: 0;
-  width: 120rpx;
-  font-size: 24rpx;
+  width: 136rpx;
+  font-size: 30rpx;
   font-weight: 700;
   color: #555;
-  line-height: 38rpx;
+  line-height: 44rpx;
 }
 
 .slip-value {
   flex: 1;
-  font-size: 24rpx;
+  font-size: 30rpx;
   font-weight: 700;
   color: #111;
-  line-height: 38rpx;
+  line-height: 44rpx;
   word-break: break-all;
 }
 
@@ -327,8 +327,8 @@ async function handlePrintApp() {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 20rpx 32rpx;
-  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  padding: 24rpx 32rpx;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
   background: #fff;
   border-top: 1rpx solid #f0f0f0;
 }
