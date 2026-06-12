@@ -135,7 +135,7 @@ async function handlePack(curtain: SalesOrderCurtainDetail) {
         await packSalesOrderCurtain(buildOperationReq(curtain.id))
         uni.showToast({ title: '打包成功', icon: 'success' })
         const code = await createBarcodeRegistry({
-          codeType: 'CURTAIN_QR',
+          codeType: 'ORDER_QR',
           targetRoute: '/pages-curtain/order/curtain-order-detail/curtain-item/index',
           codeContent: { orderId: Number(props.id), curtainId: curtain.id },
         })
@@ -211,9 +211,16 @@ function openPrintDelivery() {
   })
 }
 
-function goInventory(mat: SalesOrderMaterialDetail) {
+function goInventory(mat: SalesOrderMaterialDetail, curtain: SalesOrderCurtainDetail, structure: SalesOrderStructureDetail) {
+  const extra = {
+    orderType: ZcOrderType.CURTAIN,
+    customerName: detail.value?.customerName ?? '',
+    curtainName: curtain.curtainName ?? '',
+    structureName: structure.structureName ?? '',
+    curtainId: curtain.id,
+  }
   uni.navigateTo({
-    url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify({ ...mat, orderType: ZcOrderType.CURTAIN }))}`,
+    url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify({ ...mat, ...extra }))}`,
   })
 }
 
@@ -446,7 +453,7 @@ onShow(loadDetail)
                 v-for="mat in structure.materials"
                 :key="mat.id"
                 class="material-item"
-                @click="goInventory(mat)"
+                @click="goInventory(mat, curtain, structure)"
               >
                 <view class="material-item-row">
                   <view class="material-item-label">

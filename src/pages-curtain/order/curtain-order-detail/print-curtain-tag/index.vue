@@ -17,7 +17,11 @@ definePage({
 })
 
 const CANVAS_W = 300
-const QR_SIZE = 160
+const QR_SIZE = 100
+const MARGIN_PX = Math.round(5 / 57 * CANVAS_W) // 5mm ≈ 26px
+const MARGIN_2MM_PX = Math.round(2 / 57 * CANVAS_W) // 2mm ≈ 11px
+const TITLE_Y = MARGIN_2MM_PX + 20
+const TITLE_SPACE = TITLE_Y + 16 // 内容区相对原 MARGIN_PX 的额外下移量
 
 const instance = getCurrentInstance()
 const dictStore = useDictStore()
@@ -46,9 +50,24 @@ function safe(val: string | null | undefined): string {
   return val
 }
 
+function drawDashedLine(ctx: any, y: number) {
+  const dashLen = 8
+  const gap = 5
+  ctx.setStrokeStyle('#aaaaaa')
+  ctx.setLineWidth(1)
+  let x = 8
+  while (x < CANVAS_W - 8) {
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    ctx.lineTo(Math.min(x + dashLen, CANVAS_W - 8), y)
+    ctx.stroke()
+    x += dashLen + gap
+  }
+}
+
 function calculateCanvasHeight(): number {
-  // header: 22 + 4×26 (text lines) + [curtainName] + 24 (套数) + 10 (divider1)
-  let ty = 22 + 26 * 4 + 24 + 10
+  // 从 TITLE_SPACE 开始（标题区域下方）：4×26（文字行）+ [款式名] + 24（套数）+ 10（分割线1）
+  let ty = TITLE_SPACE + 26 * 4 + 24 + 10
   if (safe(curtainDetail.value?.curtainName))
     ty += 26
 
@@ -65,7 +84,7 @@ function calculateCanvasHeight(): number {
   if (hasContent)
     ty += 10 // divider2
 
-  ty += QR_SIZE + 16 // QR + bottom padding
+  ty += QR_SIZE + MARGIN_PX // QR + 5mm 下边距
   return Math.max(ty, 380)
 }
 
@@ -78,12 +97,25 @@ function drawLabel() {
   ctx.setFillStyle('#ffffff')
   ctx.fillRect(0, 0, CANVAS_W, canvasHeight.value)
 
+  // 顶部虚线（2mm）
+  drawDashedLine(ctx, MARGIN_2MM_PX)
+
+  // 抬头标题
+  ctx.setFillStyle('#000000')
+  ctx.setFontSize(22)
+  ctx.setTextAlign('center')
+  ctx.fillText('打包标签', CANVAS_W / 2, TITLE_Y)
+  ctx.setTextAlign('left')
+
+  // 底部虚线（2mm）
+  drawDashedLine(ctx, canvasHeight.value - MARGIN_2MM_PX)
+
   const tx = 16
-  let ty = 22
+  let ty = TITLE_SPACE
   const lh = 26
 
   ctx.setFillStyle('#000000')
-  ctx.setFontSize(16)
+  ctx.setFontSize(13)
   ctx.fillText(`订单编号：${safe(orderNo.value) || '-'}`, tx, ty); ty += lh
   ctx.fillText(`客户名称：${safe(customerName.value) || '-'}`, tx, ty); ty += lh
   ctx.fillText(`收货人：${safe(receiver.value) || '-'}`, tx, ty); ty += lh
@@ -94,7 +126,8 @@ function drawLabel() {
     ctx.fillText(`窗帘名称：${curtainName}`, tx, ty); ty += lh
   }
 
-  ctx.setFontSize(18)
+  ctx.setFillStyle('#000000')
+  ctx.setFontSize(15)
   ctx.fillText(`第 ${curtainIndex.value} 套 / 共 ${totalSets.value} 套`, tx, ty)
   ty += 24
 
@@ -116,13 +149,13 @@ function drawLabel() {
 
     hasDrawnMats = true
 
-    ctx.setFontSize(14)
-    ctx.setFillStyle('#333333')
+    ctx.setFontSize(16)
+    ctx.setFillStyle('#000000')
     ctx.fillText(safe(structure.structureName) || '-', tx, ty)
     ty += 22
 
-    ctx.setFontSize(12)
-    ctx.setFillStyle('#555555')
+    ctx.setFontSize(14)
+    ctx.setFillStyle('#000000')
     for (const mat of printMats) {
       const name = `${safe(mat.elementName) || ''}/${safe(mat.productName) || ''}`
       ctx.fillText(`· ${name}  ${mat.quantity ?? 0}${getUnitLabel(mat.unitValue)}`, tx, ty)
@@ -220,7 +253,7 @@ function handlePrint() {
 // #endif
 
 // #ifdef APP-PLUS
-const PRINT_WIDTH = 384
+const PRINT_WIDTH = 456 // 57mm @ 203 DPI
 let printerReady = false
 
 function initSunmiSdk(sdk: any): Promise<void> {
@@ -362,6 +395,10 @@ onMounted(() => {
 
 <!-- #ifdef H5 -->
 <style>
+@page {
+  size: 57mm auto;
+  margin: 5mm 0;
+}
 @media print {
   body > *:not(.page-wrap) {
     display: none !important;
@@ -378,6 +415,7 @@ onMounted(() => {
     box-shadow: none !important;
   }
   canvas {
+    width: 100% !important;
     page-break-inside: avoid;
   }
 }

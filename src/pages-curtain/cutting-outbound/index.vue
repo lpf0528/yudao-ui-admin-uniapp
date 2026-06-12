@@ -46,6 +46,7 @@ definePage({
 
 interface MatInfo {
   id: number
+  orderId: number
   productId: number
   productName: string
   batchId: number
@@ -54,6 +55,10 @@ interface MatInfo {
   quantity: number
   unitValue: string
   status?: string
+  customerName?: string
+  curtainName?: string
+  structureName?: string
+  curtainId?: number
 }
 
 const matInfo = ref<MatInfo | null>(null)
@@ -233,7 +238,7 @@ async function handleCutSubmit() {
     })
     uni.showToast({ title: '裁剪成功', icon: 'success' })
     handleCloseCutPopup()
-    navigateBackPlus()
+    await navigateToPrintCut(cutQuantity.value)
   } catch {
     // HTTP 层已自动展示后端错误信息
   } finally {
@@ -269,6 +274,36 @@ async function handlePrintLabel(item: ZcProductBatch) {
     uni.navigateTo({ url: `/pages-curtain/product-inbound/print-label/index?${query}` })
   } catch {
     uni.showToast({ title: '生成二维码失败，请重试', icon: 'none' })
+  } finally {
+    uni.hideLoading()
+  }
+}
+
+async function navigateToPrintCut(qty: number) {
+  if (!matInfo.value)
+    return
+  uni.showLoading({ title: '生成二维码…', mask: true })
+  try {
+    const codeId = await createBarcodeRegistry({
+      codeType: 'ORDER_QR',
+      targetRoute: '/pages-curtain/order/curtain-order-detail/curtain-item/index',
+      codeContent: { orderId: matInfo.value.orderId, curtainId: matInfo.value.curtainId },
+    })
+    const enc = encodeURIComponent
+    const query = [
+      `qrCode=${enc(codeId)}`,
+      `customerName=${enc(matInfo.value.customerName ?? '')}`,
+      `curtainName=${enc(matInfo.value.curtainName ?? '')}`,
+      `structureName=${enc(matInfo.value.structureName ?? '')}`,
+      `elementName=${enc(matInfo.value.elementName ?? '')}`,
+      `productName=${enc(matInfo.value.productName ?? '')}`,
+      `cutQuantity=${enc(String(qty))}`,
+      `unitLabel=${enc(getUnitLabel(matInfo.value.unitValue))}`,
+    ].join('&')
+    uni.navigateTo({ url: `/pages-curtain/cutting-outbound/print-cut/index?${query}` })
+  } catch {
+    uni.showToast({ title: '生成二维码失败', icon: 'none' })
+    navigateBackPlus()
   } finally {
     uni.hideLoading()
   }

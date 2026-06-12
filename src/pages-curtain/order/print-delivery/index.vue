@@ -128,6 +128,7 @@ async function handlePrintApp() {
     <template v-else-if="detail">
       <view class="slip-container">
         <view class="slip">
+          <view class="slip-dashed-line" />
           <view class="slip-title">
             发货联
           </view>
@@ -183,6 +184,7 @@ async function handlePrintApp() {
           </view>
 
           <view class="slip-divider slip-divider--bottom" />
+          <view class="slip-dashed-line slip-dashed-line--bottom" />
         </view>
       </view>
     </template>
@@ -208,6 +210,10 @@ async function handlePrintApp() {
 
 <!-- #ifdef H5 -->
 <style>
+@page {
+  size: 57mm auto;
+  margin: 5mm 0;
+}
 @media print {
   body > *:not(.page-wrap) {
     display: none !important;
@@ -223,6 +229,9 @@ async function handlePrintApp() {
     padding: 0 !important;
   }
   .slip {
+    width: 100% !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
     box-shadow: none !important;
     border: none !important;
   }
@@ -245,11 +254,21 @@ async function handlePrintApp() {
 
 .slip {
   width: 428rpx; /* 57mm */
-  min-height: 528rpx; /* 70mm */
   background: #fff;
   border-radius: 8rpx;
   padding: 32rpx 28rpx;
   box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.1);
+}
+
+.slip-dashed-line {
+  height: 0;
+  border-top: 2rpx dashed #aaaaaa;
+  margin: 0 -28rpx 20rpx;
+
+  &--bottom {
+    margin-top: 20rpx;
+    margin-bottom: 0;
+  }
 }
 
 .slip-title {

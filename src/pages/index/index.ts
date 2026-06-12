@@ -53,14 +53,6 @@ const menuGroupsData: MenuGroup[] = [
         iconColor: '#1890ff',
         permission: 'system:user:list',
       },
-      {
-        key: 'crop',
-        name: '入库管理',
-        icon: 'user',
-        url: '/pages-system/user/index',
-        iconColor: '#1890ff',
-        permission: 'system:user:list',
-      },
     ],
   },
 ]
