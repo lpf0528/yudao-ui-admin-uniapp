@@ -172,7 +172,7 @@ async function handlePrintLabel(item: ZcProductBatch) {
     const codeId = await createBarcodeRegistry({
       codeType: 'BATCH_QR',
       targetRoute: '/pages-curtain/product-inbound/inventory/index',
-      codeContent: { productId: item.productId, batchId: item.id },
+      codeContent: { productId: item.productId, batchNo: item.batchNo },
     })
     const enc = encodeURIComponent
     const query = `batchId=${item.id}`

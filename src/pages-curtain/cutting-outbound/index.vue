@@ -3,7 +3,9 @@ import type { ZcProductBatch } from '@/api/curtain/product'
 import type { ZcSupplierSimple } from '@/api/curtain/supplier'
 import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
+import { getBarcodeRegistry } from '@/api/curtain/barcode-registry'
 import { createInventoryRecord } from '@/api/curtain/inventory-record'
 import { cancelCutMaterial, cutMaterial, MAT_STATUS } from '@/api/curtain/order'
 import { getProductBatchPage } from '@/api/curtain/product'
@@ -65,26 +67,19 @@ const list = ref<ZcProductBatch[]>([])
 
 const displayList = computed(() => {
   let result = list.value
-
-  if (barcodeInput.value.trim()) {
-    const keyword = barcodeInput.value.trim().toLowerCase()
-    result = result.filter(item => item.batchNo?.toLowerCase().includes(keyword))
-  }
-
   const pinnedId = matInfo.value?.batchId
   if (pinnedId) {
     const idx = result.findIndex(item => item.id === pinnedId)
     if (idx > 0)
       result = [result[idx], ...result.slice(0, idx), ...result.slice(idx + 1)]
   }
-
   return result
 })
 const isCut = computed(() => matInfo.value?.status === MAT_STATUS.HAVE_PEILIAO)
 
 const loadMoreState = ref<LoadMoreState>('loading')
 const queryParams = ref({ pageNo: 1, pageSize: 199 })
-const filterParams = ref<{ warehouseId?: number, supplierId?: number }>({})
+const filterParams = ref<{ batchNo?: string, warehouseId?: number, supplierId?: number }>({})
 
 const warehouseList = ref<ZcWarehouseSimple[]>([])
 const supplierList = ref<ZcSupplierSimple[]>([])
@@ -298,6 +293,116 @@ async function handleCancelCut() {
   })
 }
 
+// ---------- 扫码悬浮按钮 ----------
+const message = useMessage()
+const scanPos = reactive({ x: 0, y: 0 })
+const isScanDragging = ref(false)
+let scanStartTouch = { x: 0, y: 0 }
+let scanStartPos = { x: 0, y: 0 }
+let scanBtnSize = 0
+
+const scanBtnStyle = computed(() => ({
+  left: `${scanPos.x}px`,
+  top: `${scanPos.y}px`,
+}))
+
+function onScanTouchStart(e: TouchEvent) {
+  isScanDragging.value = false
+  scanStartTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  scanStartPos = { x: scanPos.x, y: scanPos.y }
+}
+
+function onScanTouchMove(e: TouchEvent) {
+  isScanDragging.value = true
+  const info = uni.getSystemInfoSync()
+  const dx = e.touches[0].clientX - scanStartTouch.x
+  const dy = e.touches[0].clientY - scanStartTouch.y
+  scanPos.x = Math.max(0, Math.min(info.windowWidth - scanBtnSize, scanStartPos.x + dx))
+  scanPos.y = Math.max(0, Math.min(info.windowHeight - scanBtnSize, scanStartPos.y + dy))
+}
+
+function onScanTouchEnd() {
+  if (!isScanDragging.value)
+    handleScanCode()
+  isScanDragging.value = false
+}
+
+const barcodeProcessing = ref(false)
+
+async function processBarcodeInput(codeId: string) {
+  const trimmed = codeId.trim()
+  if (!trimmed) {
+    barcodeInput.value = ''
+    filterParams.value.id = undefined
+    resetAndLoad()
+    return
+  }
+  barcodeProcessing.value = true
+  try {
+    const data = await getBarcodeRegistry(trimmed)
+    const content = JSON.parse(data.codeContent) as { productId: number, batchNo: string }
+    if (content.productId !== productId.value) {
+      uni.showToast({ title: '产品不匹配，请扫描正确的批次码', icon: 'none', duration: 2500 })
+      return
+    }
+    barcodeInput.value = content.batchNo
+    filterParams.value.batchNo = content.batchNo
+    resetAndLoad()
+  } catch {
+    uni.showToast({ title: '条码信息不存在或无效', icon: 'none' })
+  } finally {
+    barcodeProcessing.value = false
+  }
+}
+
+function clearBarcode() {
+  barcodeInput.value = ''
+  filterParams.value.batchNo = undefined
+  resetAndLoad()
+}
+
+function handleBatchNoConfirm() {
+  const val = barcodeInput.value.trim()
+  filterParams.value.batchNo = val || undefined
+  resetAndLoad()
+}
+
+async function handleSimulateScan() {
+  let result: { value?: string }
+  try {
+    result = await message.prompt({
+      title: '模拟扫码',
+      msg: '请输入批次码ID',
+      inputPlaceholder: '请输入码ID',
+    })
+  } catch {
+    return
+  }
+  const val = (result.value ?? '').trim()
+  if (val)
+    processBarcodeInput(val)
+}
+
+function handleScanCode() {
+  // #ifndef H5
+  uni.scanCode({
+    onlyFromCamera: false,
+    success(res) {
+      processBarcodeInput(res.result)
+    },
+    fail(err) {
+      if (err.errMsg?.includes('cancel'))
+        return
+      uni.showToast({ title: '扫码失败，请重试', icon: 'none' })
+    },
+  })
+  // #endif
+
+  // #ifdef H5
+  handleSimulateScan()
+  // #endif
+}
+
 onMounted(() => {
   const pages = getCurrentPages()
   const current = pages[pages.length - 1] as any
@@ -315,6 +420,12 @@ onMounted(() => {
     productId.value = opts.productId ? Number(opts.productId) : undefined
     productName.value = decodeURIComponent(opts.productName ?? '')
   }
+
+  const info = uni.getSystemInfoSync()
+  const ratio = info.windowWidth / 750
+  scanBtnSize = Math.round(100 * ratio)
+  scanPos.x = info.windowWidth - scanBtnSize - Math.round(32 * ratio)
+  scanPos.y = info.windowHeight - Math.round(200 * ratio) - scanBtnSize
 
   loadDropdowns()
   getList()
@@ -367,17 +478,19 @@ onMounted(() => {
     </view>
 
     <template v-if="!isCut">
-      <!-- Barcode 输入筛选 -->
+      <!-- 批次号输入 -->
       <view class="barcode-bar">
         <view class="barcode-input-wrap">
           <text class="barcode-icon">⌕</text>
           <input
             v-model="barcodeInput"
             class="barcode-input"
-            placeholder="扫码或输入批次号筛选"
+            :placeholder="barcodeProcessing ? '查询中...' : '扫码或输入批次号后按确认'"
             confirm-type="search"
+            :disabled="barcodeProcessing"
+            @confirm="handleBatchNoConfirm"
           >
-          <text v-if="barcodeInput" class="barcode-clear" @click="barcodeInput = ''">✕</text>
+          <text v-if="barcodeInput" class="barcode-clear" @click="clearBarcode">✕</text>
         </view>
       </view>
 
@@ -596,6 +709,20 @@ onMounted(() => {
         </view>
       </view>
     </wd-popup>
+
+    <!-- 扫码悬浮按钮（可拖动） -->
+    <view
+      class="fixed z-10 h-100rpx w-100rpx flex items-center justify-center rounded-full bg-[#1890ff] shadow-lg"
+      :style="scanBtnStyle"
+      @touchstart.stop="onScanTouchStart"
+      @touchmove.stop.prevent="onScanTouchMove"
+      @touchend.stop="onScanTouchEnd"
+    >
+      <view class="i-carbon-scan text-48rpx text-white" />
+    </view>
+
+    <!-- 模拟扫码输入弹窗 -->
+    <wd-message-box />
 
     <!-- 裁剪弹窗 -->
     <wd-popup
