@@ -118,6 +118,58 @@ http.get<MyType>('/curtain/order/page', params)
 
 样式枚举（`Align`、`FontStyle`、`BaseStyleBuilder` 等）从 `@/uni_modules/sunmi-printersdk/utssdk/interface.uts` 引入。标签打印示例见 `src/pages-curtain/product-inbound/print-label/index.vue`（使用 `qrcode-generator` 生成二维码后通过 `LineApi` 打印）。
 
+#### 打印标签页设计规范（参考 `print-label/index.vue`）
+
+新建打印页时，遵循以下已验证的布局和参数约定：
+
+**页面三层结构**
+```
+wd-navbar（fixed top，navigationStyle: 'custom'）
+.preview-area（flex 居中，padding: 48rpx 32rpx 32rpx）
+  └─ .label-shadow（border-radius:8rpx, box-shadow, border:1rpx solid #e8e8e8）
+       └─ <canvas>（宽度固定，高度动态计算）
+.action-bar（fixed bottom，flex，gap:24rpx，padding-bottom + safe-area）
+  └─ 按钮：height 88rpx，border-radius 44rpx（胶囊），font-size 30rpx
+```
+
+**Canvas 尺寸约定（57mm 标签）**
+
+| 常量 | 值 | 说明 |
+|---|---|---|
+| `CANVAS_W` | 300px | 画布宽度，对应57mm |
+| `PRINT_WIDTH` | 456pt | 商米203DPI实际打印宽度 |
+| `QR_DRAW_SIZE` | 110px | 二维码尺寸 |
+| `MARGIN_PX` | ≈26px | 上下边距（5mm换算） |
+| `MARGIN_2MM_PX` | ≈11px | 虚线距边距（2mm换算） |
+| 行高 `lh` | 34px | 文本行间距 |
+
+**Canvas 坐标与字体**
+
+| 元素 | Y坐标 | fontSize |
+|---|---|---|
+| 顶部虚线 | y=11px | — |
+| 标题（居中） | y=46px | **22px** |
+| 二维码（居中，x=95） | y=72~182px | — |
+| 分割线 | y=196px | — |
+| 正文字段（tx=16，lh=34） | 从y=224px | **20px** |
+| 底部虚线 | canvasHeight-11px | — |
+
+**颜色规范**
+
+| 用途 | 值 |
+|---|---|
+| 页面背景 | `#f4f6f9` |
+| 标签/按钮背景 | `#ffffff` |
+| 主色 | `#1890ff` |
+| 打印按钮（描边风格） | border+color `#1890ff`，bg `#e6f7ff` |
+| 保存按钮（实心风格） | bg `#1890ff`，disabled `#91caff` |
+| 分割线 | `#dddddd` |
+| 虚线 | `#aaaaaa` |
+
+**数据传入方式**：通过 `uni.navigateTo` URL 参数传递，在 `onMounted` 中从 `getCurrentPages()` 读取并 `decodeURIComponent`。
+
+**打印流程**：`drawLabel()` 绘制 Canvas → `canvasToTempFilePath` 导出图片 → `plus.io.FileReader.readAsDataURL` 转 base64 → `LineApi.printBitmap` 发送打印机。Canvas 高度须提前用 `calculateCanvasHeight()` 算好再设置，`drawLabel` 在 `nextTick + setTimeout(100ms)` 后执行确保 canvas 已渲染。
+
 ### 环境变量
 
 存放于 `env/` 目录（不是根目录），Vite 通过 `envDir: './env'` 加载。关键变量：

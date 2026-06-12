@@ -55,6 +55,7 @@ interface MatInfo {
   quantity: number
   unitValue: string
   status?: string
+  orderNo?: string
   customerName?: string
   curtainName?: string
   structureName?: string
@@ -292,6 +293,7 @@ async function navigateToPrintCut(qty: number) {
     const enc = encodeURIComponent
     const query = [
       `qrCode=${enc(codeId)}`,
+      `orderNo=${enc(matInfo.value.orderNo ?? '')}`,
       `customerName=${enc(matInfo.value.customerName ?? '')}`,
       `curtainName=${enc(matInfo.value.curtainName ?? '')}`,
       `structureName=${enc(matInfo.value.structureName ?? '')}`,

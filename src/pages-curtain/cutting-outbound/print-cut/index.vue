@@ -14,16 +14,17 @@ definePage({
 })
 
 const CANVAS_W = 300
-const QR_DRAW_SIZE = 80
+const QR_DRAW_SIZE = 110
 const QR_X = (CANVAS_W - QR_DRAW_SIZE) / 2
 const MARGIN_PX = Math.round(5 / 57 * CANVAS_W) // 5mm 上下边距 ≈ 26px
 const MARGIN_2MM_PX = Math.round(2 / 57 * CANVAS_W) // 2mm 边距 ≈ 11px
 const TITLE_Y = MARGIN_PX + 20 // 虚线下方留出空间
-const QR_Y = TITLE_Y + 22
+const QR_Y = TITLE_Y + 26
 
 const instance = getCurrentInstance()
 
 const qrCode = ref('')
+const orderNo = ref('')
 const customerName = ref('')
 const curtainName = ref('')
 const structureName = ref('')
@@ -57,12 +58,13 @@ function splitLines(text: string, firstMax: number, restMax: number): string[] {
   return lines
 }
 
-const LH = 28
+const LH = 34
 
 function calculateCanvasHeight(): number {
   const lineY = QR_Y + QR_DRAW_SIZE + 14
   let ty = lineY + 24
   const rows: [string, string][] = [
+    ['订单号', orderNo.value],
     ['客户', customerName.value],
     ['窗帘', curtainName.value],
     ['结构', structureName.value],
@@ -73,7 +75,7 @@ function calculateCanvasHeight(): number {
   for (const [label, val] of rows) {
     if (!val)
       continue
-    const lines = splitLines(val, 20 - label.length, 26)
+    const lines = splitLines(val, 20 - label.length, 24)
     ty += lines.length * LH
   }
   return ty + MARGIN_PX
@@ -138,6 +140,7 @@ function drawLabel() {
   let ty = lineY + 28
 
   const rows: [string, string][] = [
+    ['订单号', orderNo.value],
     ['客户', customerName.value],
     ['窗帘', curtainName.value],
     ['结构', structureName.value],
@@ -146,12 +149,12 @@ function drawLabel() {
     ['裁剪数量', `${cutQuantity.value} ${unitLabel.value}`],
   ]
 
-  ctx.setFontSize(16)
+  ctx.setFontSize(20)
   ctx.setFillStyle('#000000')
   for (const [label, val] of rows) {
     if (!val)
       continue
-    const lines = splitLines(val, 20 - label.length, 26)
+    const lines = splitLines(val, 20 - label.length, 24)
     ctx.fillText(`${label}：${lines[0]}`, tx, ty)
     for (let i = 1; i < lines.length; i++) {
       ty += LH
@@ -302,6 +305,7 @@ onMounted(async () => {
   const cur = pages[pages.length - 1] as any
   const opts = cur.$page?.options ?? cur.options ?? {}
   qrCode.value = decodeURIComponent(opts.qrCode ?? '')
+  orderNo.value = decodeURIComponent(opts.orderNo ?? '')
   customerName.value = decodeURIComponent(opts.customerName ?? '')
   curtainName.value = decodeURIComponent(opts.curtainName ?? '')
   structureName.value = decodeURIComponent(opts.structureName ?? '')

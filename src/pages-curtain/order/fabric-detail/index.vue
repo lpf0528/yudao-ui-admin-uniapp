@@ -182,6 +182,8 @@ function goInventory(line: FabricMaterialRow) {
     quantity: line.quantity,
     unitValue: '',
     status: line.status,
+    orderNo: detail.value?.orderNo ?? '',
+    customerName: detail.value?.customerName ?? '',
   }
   uni.navigateTo({
     url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify(mat))}`,

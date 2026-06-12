@@ -17,11 +17,10 @@ definePage({
 })
 
 const CANVAS_W = 300
-const QR_SIZE = 100
+const QR_SIZE = 110
 const MARGIN_PX = Math.round(5 / 57 * CANVAS_W) // 5mm ≈ 26px
 const MARGIN_2MM_PX = Math.round(2 / 57 * CANVAS_W) // 2mm ≈ 11px
-const TITLE_Y = MARGIN_2MM_PX + 20
-const TITLE_SPACE = TITLE_Y + 16 // 内容区相对原 MARGIN_PX 的额外下移量
+const TITLE_Y = MARGIN_PX + 20
 
 const instance = getCurrentInstance()
 const dictStore = useDictStore()
@@ -66,10 +65,16 @@ function drawDashedLine(ctx: any, y: number) {
 }
 
 function calculateCanvasHeight(): number {
-  // 从 TITLE_SPACE 开始（标题区域下方）：4×26（文字行）+ [款式名] + 24（套数）+ 10（分割线1）
-  let ty = TITLE_SPACE + 26 * 4 + 24 + 10
+  const lh = 34
+  let ty = TITLE_Y + lh // 内容区起始（标题下方）
+
+  ty += lh * 4 // 订单编号、客户名称、收货人、下单日期
+
   if (safe(curtainDetail.value?.curtainName))
-    ty += 26
+    ty += lh
+
+  ty += lh // 套数行
+  ty += 10 // 分割线1
 
   let hasContent = false
   for (const s of curtainDetail.value?.structures ?? []) {
@@ -77,15 +82,15 @@ function calculateCanvasHeight(): number {
     if (!printMats.length)
       continue
     hasContent = true
-    ty += 22 // structure name line
-    ty += printMats.length * 20 // material lines
-    ty += 4 // gap after each structure
+    ty += lh // structure name
+    ty += printMats.length * lh // material lines
+    ty += 4 // gap
   }
   if (hasContent)
-    ty += 10 // divider2
+    ty += 10 // 分割线2
 
-  ty += QR_SIZE + MARGIN_PX // QR + 5mm 下边距
-  return Math.max(ty, 380)
+  ty += QR_SIZE + MARGIN_PX // 二维码 + 下边距
+  return Math.max(ty, 420)
 }
 
 function drawLabel() {
@@ -111,12 +116,12 @@ function drawLabel() {
   drawDashedLine(ctx, canvasHeight.value - MARGIN_2MM_PX)
 
   const tx = 16
-  let ty = TITLE_SPACE
-  const lh = 26
+  const lh = 34
+  let ty = TITLE_Y + lh // 内容区起始
 
   ctx.setFillStyle('#000000')
-  ctx.setFontSize(13)
-  ctx.fillText(`订单编号：${safe(orderNo.value) || '-'}`, tx, ty); ty += lh
+  ctx.setFontSize(20)
+  ctx.fillText(`订单号：${safe(orderNo.value) || '-'}`, tx, ty); ty += lh
   ctx.fillText(`客户名称：${safe(customerName.value) || '-'}`, tx, ty); ty += lh
   ctx.fillText(`收货人：${safe(receiver.value) || '-'}`, tx, ty); ty += lh
   ctx.fillText(`下单日期：${safe(orderDate.value) || '-'}`, tx, ty); ty += lh
@@ -126,10 +131,8 @@ function drawLabel() {
     ctx.fillText(`窗帘名称：${curtainName}`, tx, ty); ty += lh
   }
 
-  ctx.setFillStyle('#000000')
-  ctx.setFontSize(15)
   ctx.fillText(`第 ${curtainIndex.value} 套 / 共 ${totalSets.value} 套`, tx, ty)
-  ty += 24
+  ty += lh
 
   // 分割线 1
   ctx.setStrokeStyle('#dddddd')
@@ -149,17 +152,15 @@ function drawLabel() {
 
     hasDrawnMats = true
 
-    ctx.setFontSize(16)
+    ctx.setFontSize(20)
     ctx.setFillStyle('#000000')
     ctx.fillText(safe(structure.structureName) || '-', tx, ty)
-    ty += 22
+    ty += lh
 
-    ctx.setFontSize(14)
-    ctx.setFillStyle('#000000')
     for (const mat of printMats) {
-      const name = `${safe(mat.elementName) || ''}/${safe(mat.productName) || ''}`
+      const name = `${safe(mat.elementName) || ''}：${safe(mat.productName) || ''}`
       ctx.fillText(`· ${name}  ${mat.quantity ?? 0}${getUnitLabel(mat.unitValue)}`, tx, ty)
-      ty += 20
+      ty += lh
     }
     ty += 4
   }
