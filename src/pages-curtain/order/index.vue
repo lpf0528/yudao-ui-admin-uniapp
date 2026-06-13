@@ -168,14 +168,6 @@
         @reload="loadMore"
       />
     </view>
-
-    <!-- 新增按钮 -->
-    <wd-fab
-      position="right-bottom"
-      type="primary"
-      :expandable="false"
-      @click="handleAdd"
-    />
   </view>
 </template>
 
@@ -308,10 +300,6 @@ function loadMore() {
     return
   queryParams.value.pageNo++
   getList()
-}
-
-function handleAdd() {
-  uni.navigateTo({ url: '/pages-curtain/order/form/index' })
 }
 
 function handleDetail(item: SalesOrder) {

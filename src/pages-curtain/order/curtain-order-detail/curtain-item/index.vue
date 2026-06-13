@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { SalesOrderCurtainDetail } from '@/api/curtain/order'
+import type { SalesOrderCurtainDetail, SalesOrderMaterialDetail, SalesOrderStructureDetail } from '@/api/curtain/order'
 import type { OrderProcessRecord } from '@/api/curtain/order-process-record/index'
 import { onShow } from '@dcloudio/uni-app'
 import { ref } from 'vue'
-import { getSalesOrderDetail } from '@/api/curtain/order'
+import { getSalesOrderDetail, ZcOrderType } from '@/api/curtain/order'
 import { getOrderProcessRecordList } from '@/api/curtain/order-process-record/index'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
@@ -21,6 +21,7 @@ const loading = ref(true)
 const curtain = ref<SalesOrderCurtainDetail>()
 const curtainIndex = ref(0)
 const totalSets = ref(0)
+const customerName = ref('')
 const activeStructureIdx = ref(0)
 const dictStore = useDictStore()
 
@@ -87,6 +88,19 @@ function formatTime(val: string) {
   return val.replace('T', ' ').substring(0, 16)
 }
 
+function goInventory(mat: SalesOrderMaterialDetail, structure: SalesOrderStructureDetail) {
+  const extra = {
+    orderType: ZcOrderType.CURTAIN,
+    customerName: customerName.value,
+    curtainName: curtain.value?.curtainName ?? '',
+    structureName: structure.structureName ?? '',
+    curtainId: Number(props.curtainId),
+  }
+  uni.navigateTo({
+    url: `/pages-curtain/cutting-outbound/index?mat=${encodeURIComponent(JSON.stringify({ ...mat, ...extra }))}`,
+  })
+}
+
 async function loadDetail() {
   loading.value = true
   try {
@@ -95,6 +109,7 @@ async function loadDetail() {
     curtain.value = detail.curtains?.[idx]
     curtainIndex.value = idx + 1
     totalSets.value = detail.sets
+    customerName.value = detail.customerName ?? ''
   } finally {
     loading.value = false
   }
@@ -278,6 +293,7 @@ onShow(loadDetail)
                     v-for="mat in structure.materials"
                     :key="mat.id"
                     class="material-item"
+                    @click="goInventory(mat, structure)"
                   >
                     <view class="material-item-row">
                       <view class="material-item-label">
@@ -578,6 +594,7 @@ onShow(loadDetail)
   display: flex;
   flex-wrap: wrap;
   gap: 16rpx 0;
+  cursor: pointer;
 }
 
 .material-item-row {
