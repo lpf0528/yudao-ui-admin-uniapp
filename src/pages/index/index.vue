@@ -84,6 +84,24 @@ function onTouchEnd() {
 const message = useMessage()
 const operatorStore = useOperatorStore()
 
+async function navigateByCodeId(codeId: string) {
+  const id = codeId.trim()
+  if (!id) {
+    uni.showToast({ title: '码内容为空', icon: 'none' })
+    return
+  }
+  try {
+    const data = await getBarcodeRegistry(id)
+    const params = JSON.parse(data.codeContent) as Record<string, unknown>
+    const query = Object.entries(params)
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&')
+    uni.navigateTo({ url: `${data.targetRoute}?${query}` })
+  } catch {
+    uni.showToast({ title: '获取码信息失败，请重试', icon: 'none' })
+  }
+}
+
 async function handleSimulateScan() {
   let result: { value?: string }
   try {
@@ -95,21 +113,7 @@ async function handleSimulateScan() {
   } catch {
     return
   }
-  const codeId = (result.value ?? '').trim()
-  if (!codeId) {
-    uni.showToast({ title: '请输入码ID', icon: 'none' })
-    return
-  }
-  try {
-    const data = await getBarcodeRegistry(codeId)
-    const params = JSON.parse(data.codeContent) as Record<string, unknown>
-    const query = Object.entries(params)
-      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
-      .join('&')
-    uni.navigateTo({ url: `${data.targetRoute}?${query}` })
-  } catch {
-    uni.showToast({ title: '获取码信息失败，请检查码ID', icon: 'none' })
-  }
+  await navigateByCodeId(result.value ?? '')
 }
 
 function handleScanCode() {
@@ -121,11 +125,7 @@ function handleScanCode() {
   uni.scanCode({
     onlyFromCamera: false,
     success(res) {
-      uni.showToast({
-        title: res.result,
-        icon: 'none',
-        duration: 3000,
-      })
+      navigateByCodeId(res.result)
     },
     fail(err) {
       if (err.errMsg?.includes('cancel'))
