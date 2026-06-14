@@ -21,10 +21,15 @@ const records = ref<OrderProcessRecord[]>([])
 const loading = ref(false)
 const revoking = ref<number | null>(null)
 
-function formatTime(str: string) {
-  if (!str)
+function formatTime(val: string | number) {
+  if (!val)
     return ''
-  return str.replace('T', ' ').slice(0, 16)
+  if (typeof val === 'number') {
+    const d = new Date(val)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  return val.replace('T', ' ').slice(0, 16)
 }
 
 async function loadRecords() {

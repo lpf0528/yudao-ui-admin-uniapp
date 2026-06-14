@@ -34,8 +34,8 @@ export interface OrderProcessRecord {
   assistantName: string
   note: string
   imageUrls: string[]
-  createTime: string
-  updateTime: string
+  createTime: string | number
+  updateTime: string | number
 }
 
 export interface OrderProcessRecordListParam {
