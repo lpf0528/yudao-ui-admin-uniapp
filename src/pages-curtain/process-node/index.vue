@@ -33,37 +33,12 @@ let startTouch = { x: 0, y: 0 }
 let startPos = { x: 0, y: 0 }
 let btnSize = 0
 
-const showPicker = ref(false)
-const inputFocused = ref(false)
-const suppressRefocus = ref(false)
-
-function refocusInput() {
-  if (showPicker.value || suppressRefocus.value)
-    return
-  inputFocused.value = false
-  nextTick(() => {
-    inputFocused.value = true
-  })
-}
-
-watch(showPicker, (val) => {
-  if (!val)
-    nextTick(refocusInput)
-})
-
 onMounted(() => {
   const info = uni.getSystemInfoSync()
   const ratio = info.windowWidth / 750
   btnSize = Math.round(100 * ratio)
   pos.x = info.windowWidth - btnSize - Math.round(32 * ratio)
   pos.y = info.windowHeight - Math.round(200 * ratio) - btnSize
-  setTimeout(() => {
-    inputFocused.value = true
-  }, 300)
-})
-
-onShow(() => {
-  setTimeout(refocusInput, 300)
 })
 
 const btnStyle = computed(() => ({ left: `${pos.x}px`, top: `${pos.y}px` }))
@@ -97,8 +72,8 @@ const errorTipMsg = ref('')
 const userList = ref<WorkshopUserSimple[]>([])
 const processNodeList = ref<ProcessNodeSimple[]>([])
 const pickerTarget = ref<'primary' | 'secondary'>('primary')
+const showPicker = ref(false)
 const orderNo = ref('')
-const orderNoPlaceholder = ref('扫码或输入订单号')
 const orderDetail = ref<SalesOrderDetail | null>(null)
 const searching = ref(false)
 const locateCurtainId = ref<number | null>(null)
@@ -285,9 +260,6 @@ async function handleOrderSearch() {
   orderDetail.value = null
   try {
     orderDetail.value = await getSalesOrderDetail({ orderNo: no })
-    orderNoPlaceholder.value = no
-    orderNo.value = ''
-    nextTick(refocusInput)
   } catch {
     uni.showToast({ title: '未找到该订单', icon: 'none' })
   } finally {
@@ -368,7 +340,6 @@ async function processBarcodeData(codeId: string) {
 
 async function handleSimulateScan() {
   let result: { value?: string }
-  suppressRefocus.value = true
   try {
     result = await message.prompt({
       title: '模拟扫码',
@@ -376,11 +347,8 @@ async function handleSimulateScan() {
       inputPlaceholder: '请输入 UUID 格式的码ID',
     })
   } catch {
-    suppressRefocus.value = false
-    nextTick(refocusInput)
     return
   }
-  suppressRefocus.value = false
   const codeId = (result.value ?? '').trim()
   if (!codeId) {
     uni.showToast({ title: '请输入码ID', icon: 'none' })
@@ -542,12 +510,10 @@ function selectUser(user: WorkshopUserSimple) {
         <input
           v-model="orderNo"
           class="order-input"
-          :placeholder="orderNoPlaceholder"
-          :focus="inputFocused"
+          placeholder="扫码或输入订单号"
           placeholder-style="color:#bbb"
           confirm-type="search"
           @confirm="handleInputConfirm"
-          @blur="refocusInput"
         >
         <!-- <view
           v-if="orderNo"
