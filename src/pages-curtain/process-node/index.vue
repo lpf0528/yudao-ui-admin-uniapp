@@ -515,11 +515,10 @@ function selectUser(user: WorkshopUserSimple) {
           confirm-type="search"
           @confirm="handleInputConfirm"
         >
-        <!-- <view
-          v-if="orderNo"
+        <view
           class="i-carbon-close-filled text-32rpx text-#ccc"
           @tap="orderNo = ''; orderDetail = null"
-        /> -->
+        />
       </view>
     </view>
 
