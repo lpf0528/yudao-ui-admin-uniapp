@@ -27,43 +27,6 @@ function translateDict(dictType: string, value: any) {
 }
 const { primaryOperator, secondaryOperator } = storeToRefs(operatorStore)
 
-const pos = reactive({ x: 0, y: 0 })
-const isDragging = ref(false)
-let startTouch = { x: 0, y: 0 }
-let startPos = { x: 0, y: 0 }
-let btnSize = 0
-
-onMounted(() => {
-  const info = uni.getSystemInfoSync()
-  const ratio = info.windowWidth / 750
-  btnSize = Math.round(100 * ratio)
-  pos.x = info.windowWidth - btnSize - Math.round(32 * ratio)
-  pos.y = info.windowHeight - Math.round(200 * ratio) - btnSize
-})
-
-const btnStyle = computed(() => ({ left: `${pos.x}px`, top: `${pos.y}px` }))
-
-function onTouchStart(e: TouchEvent) {
-  isDragging.value = false
-  startTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY }
-  startPos = { x: pos.x, y: pos.y }
-}
-
-function onTouchMove(e: TouchEvent) {
-  isDragging.value = true
-  const info = uni.getSystemInfoSync()
-  const dx = e.touches[0].clientX - startTouch.x
-  const dy = e.touches[0].clientY - startTouch.y
-  pos.x = Math.max(0, Math.min(info.windowWidth - btnSize, startPos.x + dx))
-  pos.y = Math.max(0, Math.min(info.windowHeight - btnSize, startPos.y + dy))
-}
-
-function onTouchEnd() {
-  if (!isDragging.value)
-    handleScanCode()
-  isDragging.value = false
-}
-
 const message = useMessage()
 const showCompletedTip = ref(false)
 const showWrongNodeTip = ref(false)
@@ -78,8 +41,19 @@ const orderDetail = ref<SalesOrderDetail | null>(null)
 const searching = ref(false)
 const locateCurtainId = ref<number | null>(null)
 const locateStructureId = ref<number | null>(null)
+const scanning = ref(false)
+
+const SCAN_END_DELAY = 100
+const SCAN_MIN_LENGTH = 4
+
+let scanBuffer = ''
+let scanTimer: ReturnType<typeof setTimeout> | null = null
+let scannerListenerBound = false
+let pendingScanCode = ''
+let scannerListenerTarget: 'window' | 'document' | null = null
 
 type DeliveryLevel = 'overdue' | 'today' | 'soon' | 'normal'
+type ScanState = 'IDLE' | 'ORDER_LOADED' | 'STRUCT_SELECTED' | 'NODE_SELECTED' | 'READY_TO_COMMIT'
 
 interface DeliveryStatus {
   text: string
@@ -108,6 +82,13 @@ const selectedStructureId = ref<number | null>(null)
 const selectedNodeId = ref<number | null>(null)
 const activeCurtainId = ref<number | null>(null)
 const installProcess = ref<InstallProcess | null>(null)
+const scanState = ref<ScanState>('IDLE')
+const scanContext = reactive({
+  orderDetail: null as SalesOrderDetail | null,
+  installProcess: null as InstallProcess | null,
+  structureId: null as number | null,
+  nodeId: null as number | null,
+})
 
 const activeCurtain = computed(() => {
   if (!orderDetail.value)
@@ -171,10 +152,12 @@ watch(
   () => selectedStructure.value?.structure.installProcessId,
   async (processId) => {
     installProcess.value = null
+    scanContext.installProcess = null
     if (!processId)
       return
     try {
       installProcess.value = await getInstallProcess(processId)
+      scanContext.installProcess = installProcess.value
     } catch {
       // 获取失败时静默处理，不影响主流程
     }
@@ -182,28 +165,91 @@ watch(
   { immediate: true },
 )
 
-// 扫码后安装工艺异步加载完成时：校验工序并提交
-watch(installProcess, (newProcess) => {
-  if (!newProcess || !selectedNodeId.value)
+function setOrder(detail: SalesOrderDetail) {
+  scanContext.orderDetail = detail
+  scanState.value = 'ORDER_LOADED'
+}
+
+function setStructure(id: number) {
+  scanContext.structureId = id
+  scanState.value = 'STRUCT_SELECTED'
+}
+
+function setNode(id: number) {
+  scanContext.nodeId = id
+  scanState.value = 'NODE_SELECTED'
+}
+
+function syncReadyState() {
+  if (scanContext.orderDetail && scanContext.structureId && scanContext.nodeId)
+    scanState.value = 'READY_TO_COMMIT'
+}
+
+function resetScanState() {
+  scanState.value = 'IDLE'
+  scanContext.orderDetail = null
+  scanContext.installProcess = null
+  scanContext.structureId = null
+  scanContext.nodeId = null
+}
+
+function canCommit(): boolean {
+  if (!scanContext.orderDetail || !scanContext.structureId || !scanContext.nodeId)
+    return false
+  if (!scanContext.installProcess)
+    return true
+  const ids = parseNodeIds(scanContext.installProcess.nodeIds)
+  return ids.includes(scanContext.nodeId)
+}
+
+async function ensureInstallProcessLoaded() {
+  const processId = selectedStructure.value?.structure.installProcessId
+  scanContext.installProcess = null
+  installProcess.value = null
+  if (!processId)
     return
-  const ids = parseNodeIds(newProcess.nodeIds)
-  if (!ids.includes(selectedNodeId.value)) {
-    errorTipMsg.value = '当前窗帘不需要执行该工序'
-    showWrongNodeTip.value = true
-    setTimeout(() => { showWrongNodeTip.value = false }, 3000)
-  } else {
-    handleCompleteProcess()
+  try {
+    const process = await getInstallProcess(processId)
+    installProcess.value = process
+    scanContext.installProcess = process
+  } catch {
+    // 安装工艺加载失败时，按不可提交处理
   }
-})
+}
+
+function showWrongNodeError(msg: string) {
+  errorTipMsg.value = msg
+  showWrongNodeTip.value = true
+  setTimeout(() => { showWrongNodeTip.value = false }, 3000)
+}
+
+async function commitIfReady() {
+  syncReadyState()
+  await ensureInstallProcessLoaded()
+  if (selectedStructure.value?.structure.installProcessId && !scanContext.installProcess) {
+    showWrongNodeError('安装工艺加载失败，请重试扫码')
+    return
+  }
+  if (!canCommit()) {
+    showWrongNodeError('当前工序不允许执行')
+    return
+  }
+  await handleCompleteProcess()
+}
 
 function selectNode(id: number) {
   selectedNodeId.value = selectedNodeId.value === id ? null : id
+  scanContext.nodeId = selectedNodeId.value
+  if (selectedNodeId.value)
+    setNode(selectedNodeId.value)
 }
 
 watch(() => primaryOperator.value?.id, () => {
   selectedNodeId.value = null
+  scanContext.nodeId = null
   if (processNodeList.value.length === 1) {
     selectedNodeId.value = processNodeList.value[0].id
+    setNode(selectedNodeId.value)
   } else if (processNodeList.value.length > 1) {
     uni.showToast({ title: '请选择当前工序', icon: 'none', duration: 2000 })
   }
@@ -213,6 +259,9 @@ function selectStructure(id: number) {
   if (locateStructureId.value)
     return
   selectedStructureId.value = selectedStructureId.value === id ? null : id
+  scanContext.structureId = selectedStructureId.value
+  if (selectedStructureId.value)
+    setStructure(selectedStructureId.value)
 }
 
 const submitting = ref(false)
@@ -260,42 +309,168 @@ async function handleOrderSearch() {
   orderDetail.value = null
   try {
     orderDetail.value = await getSalesOrderDetail({ orderNo: no })
+    if (orderDetail.value)
+      setOrder(orderDetail.value)
   } catch {
     uni.showToast({ title: '未找到该订单', icon: 'none' })
+    resetScanState()
   } finally {
     searching.value = false
   }
 }
 
-const UUID_REGEX = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
-
 async function handleInputConfirm() {
   const val = orderNo.value.trim()
   if (!val)
     return
-  if (UUID_REGEX.test(val)) {
-    orderNo.value = ''
-    await processBarcodeData(val)
-  } else {
-    await handleOrderSearch()
+  await handleOrderSearch()
+}
+
+function normalizeKey(e: any): string {
+  return typeof e?.key === 'string' ? e.key : ''
+}
+
+function isPrintableScanChar(key: string, e: any): boolean {
+  if (e?.ctrlKey || e?.altKey || e?.metaKey)
+    return false
+  if (key.length !== 1)
+    return false
+  // 条码场景仅允许常见可见字符，避免拼入控制字符
+  return /^[\w\-.:/]$/.test(key)
+}
+
+function clearScanTimer() {
+  if (scanTimer) {
+    clearTimeout(scanTimer)
+    scanTimer = null
   }
+}
+
+function resetScanBuffer() {
+  scanBuffer = ''
+  clearScanTimer()
+}
+
+async function handleScanCode(code: string) {
+  const normalized = code.trim()
+  if (!normalized)
+    return
+
+  if (scanning.value) {
+    pendingScanCode = normalized
+    console.warn('[scanner] 当前请求进行中，已排队等待下一次处理:', normalized)
+    return
+  }
+
+  console.log('[scanner] 收到扫码内容:', normalized)
+  scanning.value = true
+  try {
+    await processBarcodeData(normalized)
+    console.log('[scanner] 扫码处理完成:', normalized)
+  } catch (error) {
+    console.error('[scanner] 扫码处理失败:', normalized, error)
+    throw error
+  } finally {
+    scanning.value = false
+    if (pendingScanCode) {
+      const nextCode = pendingScanCode
+      pendingScanCode = ''
+      console.log('[scanner] 开始处理排队扫码:', nextCode)
+      void handleScanCode(nextCode)
+    }
+  }
+}
+
+function flushScanBuffer() {
+  const current = scanBuffer.trim()
+  resetScanBuffer()
+  if (current.length >= SCAN_MIN_LENGTH)
+    void handleScanCode(current)
+}
+
+function handleGlobalKeydown(e: any) {
+  if (e?.isComposing)
+    return
+
+  const key = normalizeKey(e)
+  if (!key)
+    return
+
+  if (key === 'Enter' || key === 'NumpadEnter') {
+    flushScanBuffer()
+    return
+  }
+
+  if (!isPrintableScanChar(key, e))
+    return
+
+  scanBuffer += key
+  clearScanTimer()
+  scanTimer = setTimeout(() => {
+    flushScanBuffer()
+  }, SCAN_END_DELAY)
+}
+
+function bindScannerListener() {
+  if (scannerListenerBound)
+    return
+  // 只绑定一个目标，避免同一事件在 document/window 双通道重复采集
+  // #ifdef H5
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', handleGlobalKeydown, true)
+    scannerListenerTarget = 'window'
+  } else if (typeof document !== 'undefined') {
+    document.addEventListener('keydown', handleGlobalKeydown, true)
+    scannerListenerTarget = 'document'
+  }
+  // #endif
+  // #ifndef H5
+  if (typeof document !== 'undefined') {
+    document.addEventListener('keydown', handleGlobalKeydown, true)
+    scannerListenerTarget = 'document'
+  }
+  // #endif
+  scannerListenerBound = true
+}
+
+function unbindScannerListener() {
+  if (!scannerListenerBound)
+    return
+
+  if (scannerListenerTarget === 'window' && typeof window !== 'undefined')
+    window.removeEventListener('keydown', handleGlobalKeydown, true)
+  else if (scannerListenerTarget === 'document' && typeof document !== 'undefined')
+    document.removeEventListener('keydown', handleGlobalKeydown, true)
+
+  scannerListenerBound = false
+  scannerListenerTarget = null
+  pendingScanCode = ''
+  resetScanBuffer()
 }
 
 async function processBarcodeData(codeId: string) {
   try {
     const data = await getBarcodeRegistry(codeId)
+    console.log('[scanner] 条码注册信息:', data)
     const content = JSON.parse(data.codeContent ?? '{}') as Record<string, any>
+    console.log('[scanner] 解析后的条码内容:', content)
     if (content.orderNo) {
+      resetScanState()
       orderNo.value = content.orderNo
       locateCurtainId.value = content.curtainId ? Number(content.curtainId) : null
       if (content.structureId) {
         locateStructureId.value = Number(content.structureId)
         selectedStructureId.value = Number(content.structureId)
+        setStructure(Number(content.structureId))
       } else {
         locateStructureId.value = null
         selectedStructureId.value = null
+        if (selectedStructureId.value)
+          setStructure(selectedStructureId.value)
       }
       await handleOrderSearch()
+      if (orderDetail.value)
+        setOrder(orderDetail.value)
       if (locateStructureId.value && orderDetail.value) {
         const found = orderDetail.value.curtains.some(c =>
           c.structures.some(s => s.id === locateStructureId.value),
@@ -303,8 +478,11 @@ async function processBarcodeData(codeId: string) {
         if (!found) {
           locateStructureId.value = null
           selectedStructureId.value = null
+          scanContext.structureId = null
         }
       }
+      if (selectedStructureId.value && !scanContext.structureId)
+        setStructure(selectedStructureId.value)
       if (!selectedNodeId.value) {
         try {
           await message.confirm({
@@ -316,67 +494,23 @@ async function processBarcodeData(codeId: string) {
         } catch {
           // 用户取消，无需处理
         }
-      } else if (!selectedStructure.value?.structure.installProcessId) {
-        // 该结构无安装工艺要求，直接提交
-        handleCompleteProcess()
-      } else if (installProcess.value) {
-        // 同一结构重复扫码，installProcess 未变化，watch 不会再触发，直接校验
-        const ids = parseNodeIds(installProcess.value.nodeIds)
-        if (!ids.includes(selectedNodeId.value)) {
-          errorTipMsg.value = '当前窗帘不需要执行该工序'
-          showWrongNodeTip.value = true
-          setTimeout(() => { showWrongNodeTip.value = false }, 3000)
-        } else {
-          handleCompleteProcess()
-        }
+      } else {
+        setNode(selectedNodeId.value)
+        await commitIfReady()
       }
+      console.log('[scanner] 本次扫码业务处理成功，订单号:', content.orderNo)
     } else {
+      console.warn('[scanner] 条码缺少 orderNo，无法处理:', content)
       uni.showToast({ title: '该码暂不支持解析', icon: 'none' })
     }
-  } catch {
+  } catch (error) {
+    console.error('[scanner] 条码解析/请求失败:', codeId, error)
     uni.showToast({ title: '码ID无效或已过期', icon: 'none' })
   }
 }
 
-async function handleSimulateScan() {
-  let result: { value?: string }
-  try {
-    result = await message.prompt({
-      title: '模拟扫码',
-      msg: '请输入码ID（codeId）',
-      inputPlaceholder: '请输入 UUID 格式的码ID',
-    })
-  } catch {
-    return
-  }
-  const codeId = (result.value ?? '').trim()
-  if (!codeId) {
-    uni.showToast({ title: '请输入码ID', icon: 'none' })
-    return
-  }
-  await processBarcodeData(codeId)
-}
-
-function handleScanCode() {
-  // #ifndef H5
-  uni.scanCode({
-    onlyFromCamera: false,
-    async success(res) {
-      await processBarcodeData(res.result)
-    },
-    fail(err) {
-      if (err.errMsg?.includes('cancel'))
-        return
-      uni.showToast({ title: '扫码失败，请重试', icon: 'none' })
-    },
-  })
-  // #endif
-  // #ifdef H5
-  handleSimulateScan()
-  // #endif
-}
-
 onLoad(async (query) => {
+  bindScannerListener()
   ;[userList.value, processNodeList.value] = await Promise.all([
     getWorkshopUserSimpleList(),
     getMyProcessNodes(),
@@ -414,6 +548,18 @@ onLoad(async (query) => {
       }
     }
   }
+})
+
+onShow(() => {
+  bindScannerListener()
+})
+
+onHide(() => {
+  unbindScannerListener()
+})
+
+onUnload(() => {
+  unbindScannerListener()
 })
 
 function openPicker(target: 'primary' | 'secondary') {
@@ -679,17 +825,6 @@ function selectUser(user: WorkshopUserSimple) {
         </view>
       </view>
     </view>
-  </view>
-
-  <!-- 可拖动扫码悬浮按钮 -->
-  <view
-    class="fixed z-10 h-100rpx w-100rpx flex items-center justify-center rounded-full bg-[#018d71] shadow-lg"
-    :style="btnStyle"
-    @touchstart.stop="onTouchStart"
-    @touchmove.stop.prevent="onTouchMove"
-    @touchend.stop="onTouchEnd"
-  >
-    <view class="i-carbon-scan text-48rpx text-white" />
   </view>
 
   <wd-message-box />

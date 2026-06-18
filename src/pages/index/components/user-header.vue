@@ -28,12 +28,22 @@ function openPicker(target: 'primary' | 'secondary') {
 
 function selectUser(user: WorkshopUserSimple) {
   if (pickerTarget.value === 'primary') {
+    if (primaryOperator.value?.id === user.id) {
+      operatorStore.setPrimary(null)
+      showPicker.value = false
+      return
+    }
     if (secondaryOperator.value?.id === user.id) {
       uni.showToast({ title: '主副操作员不能是同一人', icon: 'none' })
       return
     }
     operatorStore.setPrimary(user)
   } else {
+    if (secondaryOperator.value?.id === user.id) {
+      operatorStore.setSecondary(null)
+      showPicker.value = false
+      return
+    }
     if (primaryOperator.value?.id === user.id) {
       uni.showToast({ title: '主副操作员不能是同一人', icon: 'none' })
       return
