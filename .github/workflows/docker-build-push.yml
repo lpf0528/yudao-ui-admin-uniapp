@@ -9,24 +9,25 @@ on:
       - .gitignore
       - '.vscode/**'
       - '.image/**'
-      - 'docs/**'
   workflow_dispatch:
-
-permissions:
-  contents: read
-  actions: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  REGISTRY: docker.io
+  # Docker Hub 仓库名，格式：dockerhub用户名/仓库名
+  IMAGE_NAME: eatsleeprun/yudao-ui-admin-uniapp
+
 jobs:
   # ─────────────────────────────────────────────
-  # 1. 构建预检
+  # 1. 代码检查
   # ─────────────────────────────────────────────
   lint:
-    name: 构建预检
+    name: 代码检查
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
     env:
       HUSKY: 0
       NODE_OPTIONS: --max-old-space-size=6144
@@ -60,11 +61,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint]
     if: always() && (needs.lint.result == 'success' || needs.lint.result == 'skipped')
-    env:
-      # 镜像命名空间必须与 DOCKERHUB_USERNAME 一致，否则推送会 401
-      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/yudao-ui-admin-uniapp
     outputs:
-      image_full: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/yudao-ui-admin-uniapp:${{ steps.meta.outputs.version }}
+      image_full: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
       image_tag: ${{ steps.meta.outputs.version }}
     steps:
       - name: 检出代码
@@ -90,7 +88,6 @@ jobs:
       - name: 登录 Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: docker.io
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -103,9 +100,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64
-          # 使用 GitHub Actions 缓存，避免额外的 Docker Hub cache 仓库权限问题
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}-cache:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}-cache:buildcache,mode=max
           provenance: false
           sbom: false
 
@@ -153,9 +149,12 @@ jobs:
           echo "## ✅ 移动端 H5 部署成功" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
           echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
-          echo "| 镜像 | \`${{ needs.build-and-push.outputs.image_full }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 镜像 | \`docker.io/eatsleeprun/yudao-ui-admin-uniapp:latest\` |" >> $GITHUB_STEP_SUMMARY
           echo "| 服务器 | \`${{ secrets.SERVER_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
 
+  # ─────────────────────────────────────────────
+  # 3. 通知（可选）
+  # ─────────────────────────────────────────────
   notify:
     name: 通知
     runs-on: ubuntu-latest
