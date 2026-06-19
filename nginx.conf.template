@@ -35,6 +35,11 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # index.html 禁止长期缓存，避免发版后浏览器仍用旧入口
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";

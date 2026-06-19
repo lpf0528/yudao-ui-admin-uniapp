@@ -181,7 +181,13 @@
   "pnpm": {
     "overrides": {
       "unconfig": "7.3.2"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@uni-helper/unocss-preset-uni",
+      "core-js",
+      "esbuild",
+      "vue-demi"
+    ]
   },
   "overrides": {
     "unconfig": "7.3.2"
