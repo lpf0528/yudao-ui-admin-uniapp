@@ -30,7 +30,7 @@ jobs:
           cache: pnpm
 
       - name: 安装依赖
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --frozen-lockfile
 
       - name: 生成基础配置文件
         run: pnpm init-baseFiles
@@ -41,5 +41,6 @@ jobs:
       - name: 验证产物存在
         run: |
           test -f dist/build/h5/index.html || (echo "❌ H5 构建产物不存在" && exit 1)
+          node scripts/check-h5-bundle.mjs
           echo "✅ H5 构建成功，产物大小："
           du -sh dist/build/h5/

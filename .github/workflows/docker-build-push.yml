@@ -45,13 +45,16 @@ jobs:
           cache: pnpm
 
       - name: 安装依赖
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --frozen-lockfile
 
       - name: 生成基础配置文件
         run: pnpm init-baseFiles
 
       - name: H5 生产构建
         run: pnpm build:h5
+
+      - name: 验证 wot-design 组件已打入主包
+        run: node scripts/check-h5-bundle.mjs
 
   # ─────────────────────────────────────────────
   # 2. 构建并推送镜像

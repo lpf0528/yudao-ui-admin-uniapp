@@ -92,6 +92,7 @@
     "init-husky": "git init && husky",
     "init-baseFiles": "node ./scripts/create-base-files.js",
     "init-json": "pnpm init-baseFiles",
+    "check:h5-bundle": "node scripts/check-h5-bundle.mjs",
     "prepare": "pnpm init-husky & pnpm init-baseFiles",
     "lint": "eslint",
     "lint:fix": "eslint --fix"

@@ -36,7 +36,7 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-RUN pnpm init-baseFiles && pnpm build:h5
+RUN pnpm init-baseFiles && pnpm build:h5 && node scripts/check-h5-bundle.mjs
 
 # ======================== Stage 2: Nginx 托管 ========================
 FROM nginx:1.27-alpine AS runner
