@@ -371,50 +371,51 @@ onShow(loadDetail)
           v-for="line in materials"
           :key="line.id"
           class="batch-item"
-          @click="goInventory(line)"
         >
-          <view class="batch-header">
-            <view class="batch-index">
-              {{ line.curtainIndex }}
-            </view>
-            <view class="text-30rpx text-[#333] font-medium">
-              {{ line.productName || '-' }}
-            </view>
-            <view class="batch-status" :class="`status-${getStatusColorType(line.curtainStatus)}`">
-              {{ getStatusLabel(line.curtainStatus) }}
-            </view>
-          </view>
-          <view class="batch-body">
-            <view class="batch-row">
-              <view class="batch-label">
-                批次号
+          <view class="batch-clickable" @click="goInventory(line)">
+            <view class="batch-header">
+              <view class="batch-index">
+                {{ line.curtainIndex }}
               </view>
-              <view class="batch-value">
-                {{ line.batchNo || '-' }}
+              <view class="text-30rpx text-[#333] font-medium">
+                {{ line.productName || '-' }}
+              </view>
+              <view class="batch-status" :class="`status-${getStatusColorType(line.curtainStatus)}`">
+                {{ getStatusLabel(line.curtainStatus) }}
               </view>
             </view>
-            <view class="batch-row">
-              <view class="batch-label">
-                数量
+            <view class="batch-body">
+              <view class="batch-row">
+                <view class="batch-label">
+                  批次号
+                </view>
+                <view class="batch-value">
+                  {{ line.batchNo || '-' }}
+                </view>
               </view>
-              <view class="batch-value">
-                {{ line.quantity }}
+              <view class="batch-row">
+                <view class="batch-label">
+                  数量
+                </view>
+                <view class="batch-value">
+                  {{ line.quantity }}
+                </view>
               </view>
-            </view>
-            <view class="batch-row">
-              <view class="batch-label">
-                裁剪状态
+              <view class="batch-row">
+                <view class="batch-label">
+                  裁剪状态
+                </view>
+                <view class="batch-value" :class="line.cutQuantity ? 'cut-done' : 'cut-pending'">
+                  {{ line.cutQuantity ? '已裁剪' : '未裁剪' }}
+                </view>
               </view>
-              <view class="batch-value" :class="line.cutQuantity ? 'cut-done' : 'cut-pending'">
-                {{ line.cutQuantity ? '已裁剪' : '未裁剪' }}
-              </view>
-            </view>
-            <view class="batch-row full-width">
-              <view class="batch-label">
-                备注
-              </view>
-              <view class="batch-value">
-                {{ line.note || '-' }}
+              <view class="batch-row full-width">
+                <view class="batch-label">
+                  备注
+                </view>
+                <view class="batch-value">
+                  {{ line.note || '-' }}
+                </view>
               </view>
             </view>
           </view>
@@ -423,7 +424,7 @@ onShow(loadDetail)
               :type="line.curtainShipTime ? 'warning' : 'success'"
               size="small"
               :loading="shippingId === line.curtainId"
-              @click.stop="handleShip(line)"
+              @click="handleShip(line)"
             >
               {{ line.curtainShipTime ? '撤销发货' : '发货' }}
             </wd-button>
