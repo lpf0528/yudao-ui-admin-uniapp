@@ -61,6 +61,7 @@ export interface SalesOrderPageParam {
   pageSize: number
   orderNo?: string
   types?: string
+  isExpedited?: boolean
   orderDate?: string[]
 }
 

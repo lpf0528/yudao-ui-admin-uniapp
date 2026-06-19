@@ -33,19 +33,27 @@
         </view>
       </view>
 
-      <!-- 订单类型 -->
+      <!-- 订单类型 + 加急 -->
       <view class="filter-section">
         <view class="filter-label">
           订单类型
         </view>
-        <view class="status-chips">
-          <view
-            v-for="item in typeOptions"
-            :key="item.value"
-            class="status-chip" :class="[{ active: filterParams.types === item.value }]"
-            @click="filterParams.types = item.value"
-          >
-            {{ item.label }}
+        <view class="type-expedited-row">
+          <view class="status-chips">
+            <view
+              v-for="item in typeOptions"
+              :key="item.value"
+              class="status-chip" :class="[{ active: filterParams.types === item.value }]"
+              @click="filterParams.types = item.value"
+            >
+              {{ item.label }}
+            </view>
+          </view>
+          <view class="expedited-checkbox" @click.stop="filterParams.onlyExpedited = !filterParams.onlyExpedited">
+            <text class="expedited-label">加急</text>
+            <view class="expedited-box" :class="{ 'expedited-box--checked': filterParams.onlyExpedited }">
+              <text v-if="filterParams.onlyExpedited" class="expedited-check">✓</text>
+            </view>
           </view>
         </view>
       </view>
@@ -200,6 +208,7 @@ const filterParams = ref({
   orderNo: '',
   customerId: undefined as number | undefined,
   types: '',
+  onlyExpedited: false,
   startDate: '',
   endDate: '',
 })
@@ -262,6 +271,8 @@ async function getList() {
       params.customerId = filterParams.value.customerId
     if (filterParams.value.types)
       params.types = filterParams.value.types
+    if (filterParams.value.onlyExpedited)
+      params.isExpedited = true
     if (filterParams.value.startDate || filterParams.value.endDate) {
       params.orderDate = [
         filterParams.value.startDate ? `${filterParams.value.startDate} 00:00:00` : '',
@@ -289,7 +300,7 @@ function handleQuery() {
 }
 
 function handleReset() {
-  filterParams.value = { orderNo: '', customerId: undefined, types: '', startDate: '', endDate: '' }
+  filterParams.value = { orderNo: '', customerId: undefined, types: '', onlyExpedited: false, startDate: '', endDate: '' }
   queryParams.value.pageNo = 1
   list.value = []
   getList()
@@ -330,6 +341,47 @@ onMounted(() => {
   &:last-of-type {
     margin-bottom: 16rpx;
   }
+}
+
+.type-expedited-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.expedited-checkbox {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.expedited-label {
+  font-size: 28rpx;
+  color: #666;
+  font-weight: 500;
+}
+
+.expedited-box {
+  width: 36rpx;
+  height: 36rpx;
+  border: 1rpx solid #ddd;
+  border-radius: 4rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff;
+
+  &--checked {
+    border-color: #1890ff;
+    background-color: #1890ff;
+  }
+}
+
+.expedited-check {
+  font-size: 24rpx;
+  color: #fff;
+  line-height: 1;
 }
 
 .search-inputs {
@@ -398,8 +450,10 @@ onMounted(() => {
 
 .status-chips {
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
   gap: 8rpx;
+  min-width: 0;
 }
 
 .status-chip {

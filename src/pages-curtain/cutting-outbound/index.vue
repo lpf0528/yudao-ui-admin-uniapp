@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { ZcProductBatch } from '@/api/curtain/product'
-import type { ZcSupplierSimple } from '@/api/curtain/supplier'
 import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -9,7 +8,6 @@ import { createBarcodeRegistry, getBarcodeRegistry } from '@/api/curtain/barcode
 import { createInventoryRecord } from '@/api/curtain/inventory-record'
 import { cancelCutMaterial, cutMaterial, MAT_STATUS } from '@/api/curtain/order'
 import { getProductBatchPage, getProductBatchStatusColorType, getProductBatchStatusLabel } from '@/api/curtain/product'
-import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
 import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
@@ -85,12 +83,10 @@ const isCut = computed(() => matInfo.value?.status === MAT_STATUS.HAVE_PEILIAO)
 
 const loadMoreState = ref<LoadMoreState>('loading')
 const queryParams = ref({ pageNo: 1, pageSize: 199 })
-const filterParams = ref<{ batchNo?: string, warehouseId?: number, supplierId?: number }>({})
+const filterParams = ref<{ batchNo?: string, warehouseId?: number }>({})
 
 const warehouseList = ref<ZcWarehouseSimple[]>([])
-const supplierList = ref<ZcSupplierSimple[]>([])
 const warehouseIndex = ref<number | null>(null)
-const supplierIndex = ref<number | null>(null)
 
 function handleBack() {
   navigateBackPlus()
@@ -127,33 +123,15 @@ function onWarehouseChange(e: any) {
   resetAndLoad()
 }
 
-function onSupplierChange(e: any) {
-  const idx = Number(e.detail.value)
-  supplierIndex.value = idx
-  filterParams.value.supplierId = supplierList.value[idx]?.id
-  resetAndLoad()
-}
-
 function clearWarehouse() {
   warehouseIndex.value = null
   filterParams.value.warehouseId = undefined
   resetAndLoad()
 }
 
-function clearSupplier() {
-  supplierIndex.value = null
-  filterParams.value.supplierId = undefined
-  resetAndLoad()
-}
-
 async function loadDropdowns() {
   try {
-    const [warehouses, suppliers] = await Promise.all([
-      getWarehouseSimpleList(),
-      getSupplierSimpleList(),
-    ])
-    warehouseList.value = warehouses
-    supplierList.value = suppliers
+    warehouseList.value = await getWarehouseSimpleList()
   } catch {}
 }
 
@@ -566,25 +544,6 @@ onMounted(() => {
           </picker>
           <text v-if="warehouseIndex !== null" class="filter-clear" @click.stop="clearWarehouse">✕</text>
         </view>
-        <view class="filter-divider" />
-        <view class="filter-cell">
-          <text class="filter-label">供应商</text>
-          <picker
-            mode="selector"
-            :range="supplierList"
-            range-key="shortName"
-            :value="supplierIndex ?? 0"
-            @change="onSupplierChange"
-          >
-            <view class="filter-trigger">
-              <text class="filter-value" :class="{ placeholder: supplierIndex === null }">
-                {{ supplierIndex !== null ? (supplierList[supplierIndex]?.shortName || '全部') : '全部供应商' }}
-              </text>
-              <text class="filter-arrow">▾</text>
-            </view>
-          </picker>
-          <text v-if="supplierIndex !== null" class="filter-clear" @click.stop="clearSupplier">✕</text>
-        </view>
       </view>
 
       <!-- 统计条 -->
@@ -654,12 +613,8 @@ onMounted(() => {
               <text class="detail-value">{{ item.warehouseName || '-' }}</text>
             </view>
             <view class="detail-item">
-              <text class="detail-label">供应商</text>
-              <text class="detail-value">{{ item.supplierName || '-' }}</text>
-            </view>
-            <view v-if="item.note" class="detail-item full-width">
-              <text class="detail-label">备注</text>
-              <text class="detail-value">{{ item.note }}</text>
+              <text class="detail-label">产品名称</text>
+              <text class="detail-value">{{ item.productName || '-' }}</text>
             </view>
           </view>
 
@@ -915,7 +870,7 @@ onMounted(() => {
 .mat-info-value {
   font-size: 28rpx;
   color: #fff;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .barcode-bar {
@@ -1154,7 +1109,8 @@ onMounted(() => {
 
 .detail-value {
   font-size: 24rpx;
-  color: #555;
+  color: #222;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1241,7 +1197,8 @@ onMounted(() => {
 
 .check-info-value {
   font-size: 26rpx;
-  color: #333;
+  color: #222;
+  font-weight: 600;
 
   &.old-qty {
     font-size: 30rpx;

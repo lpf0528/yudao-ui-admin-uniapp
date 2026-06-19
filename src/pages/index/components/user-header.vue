@@ -12,13 +12,46 @@ const operatorStore = useOperatorStore()
 const { primaryOperator, secondaryOperator } = storeToRefs(operatorStore)
 
 const userList = ref<WorkshopUserSimple[]>([])
+const refreshing = ref(false)
 
 // 弹框状态：'primary' | 'secondary' | null
 const pickerTarget = ref<'primary' | 'secondary' | null>(null)
 const showPicker = ref(false)
 
-onMounted(async () => {
-  userList.value = await getWorkshopUserSimpleList()
+function syncSelectedOperators(list: WorkshopUserSimple[]) {
+  if (primaryOperator.value) {
+    const found = list.find(u => u.id === primaryOperator.value!.id)
+    operatorStore.setPrimary(found ?? null)
+  }
+  if (secondaryOperator.value) {
+    const found = list.find(u => u.id === secondaryOperator.value!.id)
+    operatorStore.setSecondary(found ?? null)
+  }
+}
+
+async function loadUserList(showToast = false) {
+  const list = await getWorkshopUserSimpleList()
+  userList.value = list
+  syncSelectedOperators(list)
+  if (showToast)
+    uni.showToast({ title: '已刷新', icon: 'success' })
+}
+
+async function handleRefresh() {
+  if (refreshing.value)
+    return
+  refreshing.value = true
+  try {
+    await loadUserList(true)
+  } catch {
+    uni.showToast({ title: '刷新失败', icon: 'none' })
+  } finally {
+    refreshing.value = false
+  }
+}
+
+onMounted(() => {
+  loadUserList()
 })
 
 function openPicker(target: 'primary' | 'secondary') {
@@ -98,7 +131,14 @@ const disabledId = computed(() => {
         <text class="text-30rpx text-#333 font-500">
           选择{{ pickerTarget === 'primary' ? '主' : '副' }}操作员
         </text>
-        <view class="i-carbon-close text-36rpx text-#999" @tap="showPicker = false" />
+        <view class="picker-header-actions">
+          <view
+            class="refresh-btn i-carbon-renew text-36rpx text-[#018d71]"
+            :class="{ 'refresh-btn--loading': refreshing }"
+            @tap.stop="handleRefresh"
+          />
+          <view class="i-carbon-close text-36rpx text-#999" @tap="showPicker = false" />
+        </view>
       </view>
       <scroll-view scroll-y style="max-height: 50vh">
         <view
@@ -126,6 +166,25 @@ const disabledId = computed(() => {
   box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.06);
 }
 
+.refresh-btn {
+  padding: 4rpx;
+
+  &--loading {
+    opacity: 0.5;
+    animation: refresh-spin 0.8s linear infinite;
+  }
+}
+
+@keyframes refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .picker-wrap {
   width: 560rpx;
   padding: 32rpx 0 0;
@@ -139,6 +198,12 @@ const disabledId = computed(() => {
   justify-content: space-between;
   padding: 0 32rpx 24rpx;
   border-bottom: 1rpx solid #f0f0f0;
+}
+
+.picker-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
 }
 
 .picker-item:first-child {

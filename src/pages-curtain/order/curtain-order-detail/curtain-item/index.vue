@@ -59,20 +59,44 @@ function formatMountings(val: string) {
   return val
 }
 
+function translateDict(dictType: string, value: any): string {
+  return dictStore.getDictData(dictType, value)?.label ?? String(value ?? '')
+}
+
+/** 结构属性字段 → 字典类型 */
+const STRUCTURE_ATTR_DICT_MAP: Record<string, string> = {
+  note: 'zc_size_remark', // 尺寸旁备注(宽*高)
+  openMethod: 'zc_open_method', // 打开方式
+  processType: 'zc_process_type', // 加工类型
+  isShaping: 'infra_boolean_string', // 是否定型
+}
+
+function getIsShapingLabel(val: boolean): string {
+  return dictStore.getDictData('infra_boolean_string', String(val))?.label ?? (val ? '是' : '否')
+}
+
 function getStructureAttrValue(structure: any, key: string): string | null {
   if (key === 'installProcessId') {
     return structure.installProcessName || null
   }
-  if (key === 'shaping') {
-    return structure.isShaping ? '是' : '否'
+  if (key === 'isShaping' || key === 'shaping') {
+    if (structure.isShaping === null || structure.isShaping === undefined)
+      return null
+    return getIsShapingLabel(structure.isShaping)
   }
   if (key === 'pasteDirection') {
     const val = structure.pasteDirection
     if (!val)
       return null
-    return dictStore.getDictData('zc_paste_direction', val)?.label ?? val
+    return translateDict('zc_paste_direction', val)
   }
+  const dictType = STRUCTURE_ATTR_DICT_MAP[key]
   const val = structure[key]
+  if (dictType) {
+    if (val === null || val === undefined || val === '')
+      return null
+    return translateDict(dictType, val)
+  }
   if (val === null || val === undefined || val === '')
     return null
   return String(val)
@@ -265,24 +289,19 @@ onShow(loadDetail)
             <!-- Tab 内容 -->
             <template v-for="(structure, idx) in curtain.structures" :key="structure.id">
               <view v-if="activeStructureIdx === idx" class="structure-content">
-                <!-- 尺寸 + 参数 -->
+                <!-- 结构信息 -->
                 <view class="structure-params">
                   <view v-if="structure.width || structure.height" class="param-item">
-                    <view class="info-label">
-                      尺寸
-                    </view>
-                    <view class="info-value">
-                      {{ structure.width }} × {{ structure.height }}
-                    </view>
+                    <text class="info-label">尺寸（宽*高）：</text>
+                    <text class="info-value">{{ structure.width }}*{{ structure.height }}</text>
                   </view>
                   <template v-for="attr in dictStore.getDictOptions('zc_structure_attributes')" :key="attr.value">
-                    <view v-if="getStructureAttrValue(structure, attr.value) !== null" class="param-item">
-                      <view class="info-label">
-                        {{ attr.label }}
-                      </view>
-                      <view class="info-value">
-                        {{ getStructureAttrValue(structure, attr.value) }}
-                      </view>
+                    <view
+                      v-if="getStructureAttrValue(structure, attr.value) !== null"
+                      class="param-item"
+                    >
+                      <text class="info-label">{{ attr.label }}：</text>
+                      <text class="info-value">{{ getStructureAttrValue(structure, attr.value) }}</text>
                     </view>
                   </template>
                 </view>
@@ -568,17 +587,29 @@ onShow(loadDetail)
 .structure-params {
   display: flex;
   flex-wrap: wrap;
-  gap: 12rpx 0;
+  align-items: baseline;
+  gap: 12rpx 32rpx;
   margin-bottom: 12rpx;
   padding-bottom: 12rpx;
   border-bottom: 1rpx solid #efefef;
 }
 
 .param-item {
-  width: 25%;
+  flex: 0 1 auto;
+  max-width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 4rpx;
+  flex-direction: row;
+  align-items: baseline;
+  line-height: 1.5;
+
+  .info-label {
+    flex-shrink: 0;
+  }
+
+  .info-value {
+    flex-shrink: 1;
+    word-break: break-all;
+  }
 }
 
 .material-list {
