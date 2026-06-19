@@ -73,6 +73,8 @@ export interface ZcProductBatchSaveReq {
   warehouseId?: number
   supplierId?: number
   note?: string
+  spec?: string
+  status?: ProductBatchStatusType
 }
 
 export function createProductBatchList(data: ZcProductBatchSaveReq[]) {

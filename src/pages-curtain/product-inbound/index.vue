@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { ZcProduct } from '@/api/curtain/product'
+import type { ZcProductVersionSimple, ZcProductVersionSpecResp } from '@/api/curtain/product-version'
 import type { ZcSupplierSimple } from '@/api/curtain/supplier'
 import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
 import { onReachBottom } from '@dcloudio/uni-app'
 import { onMounted, ref } from 'vue'
 import { createProductBatchList, getProductPage } from '@/api/curtain/product'
+import { getProductVersionSimpleList } from '@/api/curtain/product-version'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
 import { useDictStore } from '@/store/dict'
@@ -29,7 +31,11 @@ const total = ref(0)
 const list = ref<ZcProduct[]>([])
 const loadMoreState = ref<LoadMoreState>('loading')
 const queryParams = ref({ pageNo: 1, pageSize: 20 })
+const filterParams = ref<{ versionId?: number }>({})
 const searchName = ref('')
+
+const versionList = ref<ZcProductVersionSimple[]>([])
+const versionIndex = ref<number | null>(null)
 
 function handleBack() {
   navigateBackPlus()
@@ -41,6 +47,7 @@ async function getList() {
     const data = await getProductPage({
       ...queryParams.value,
       name: searchName.value || undefined,
+      ...filterParams.value,
     })
     list.value = queryParams.value.pageNo === 1
       ? data.list
@@ -54,10 +61,27 @@ async function getList() {
   }
 }
 
-function handleSearch() {
+function resetAndLoad() {
   queryParams.value.pageNo = 1
   list.value = []
   getList()
+}
+
+function handleSearch() {
+  resetAndLoad()
+}
+
+function onVersionChange(e: any) {
+  const idx = Number(e.detail.value)
+  versionIndex.value = idx
+  filterParams.value.versionId = versionList.value[idx]?.id
+  resetAndLoad()
+}
+
+function clearVersion() {
+  versionIndex.value = null
+  filterParams.value.versionId = undefined
+  resetAndLoad()
 }
 
 function loadMore() {
@@ -79,12 +103,14 @@ const supplierIndex = ref<number | null>(null)
 
 async function loadDropdowns() {
   try {
-    const [warehouses, suppliers] = await Promise.all([
+    const [warehouses, suppliers, versions] = await Promise.all([
       getWarehouseSimpleList(),
       getSupplierSimpleList(),
+      getProductVersionSimpleList(),
     ])
     warehouseList.value = warehouses
     supplierList.value = suppliers
+    versionList.value = versions
     const defaultIdx = warehouses.findIndex(w => w.defaultStatus)
     if (defaultIdx >= 0)
       warehouseIndex.value = defaultIdx
@@ -101,6 +127,7 @@ function onSupplierChange(e: any) {
 
 // ---------- 弹窗表单 ----------
 interface BatchRow {
+  specIndex: number | null
   inboundPrice: number | undefined
   inboundQuantity: number | undefined
   note: string
@@ -110,14 +137,58 @@ const showPopup = ref(false)
 const currentProduct = ref<ZcProduct | null>(null)
 const submitting = ref(false)
 const batches = ref<BatchRow[]>([])
+const specOptions = ref<ZcProductVersionSpecResp[]>([])
 
-function newRow(defaultPrice?: number): BatchRow {
-  return { inboundPrice: defaultPrice, inboundQuantity: undefined, note: '' }
+function getBatchSpec(batch: BatchRow): ZcProductVersionSpecResp | null {
+  if (batch.specIndex === null)
+    return null
+  return specOptions.value[batch.specIndex] ?? null
+}
+
+function createDefaultSpecIndex(product?: ZcProduct): number | null {
+  if (specOptions.value.length === 1)
+    return 0
+  if (product?.specId) {
+    const idx = specOptions.value.findIndex(s => s.id === product.specId)
+    return idx >= 0 ? idx : null
+  }
+  return null
+}
+
+function getSpecInboundPrice(specIndex: number | null): number | undefined {
+  if (specIndex === null)
+    return undefined
+  return specOptions.value[specIndex]?.inboundPrice
+}
+
+function initSpecOptions(product: ZcProduct) {
+  const version = versionList.value.find(v => v.id === product.versionId)
+  specOptions.value = version?.specConfs ?? []
+}
+
+function onSpecChange(e: any, batchIndex: number) {
+  const idx = Number(e.detail.value)
+  const batch = batches.value[batchIndex]
+  if (!batch)
+    return
+  batch.specIndex = idx
+  batch.inboundPrice = specOptions.value[idx]?.inboundPrice
+}
+
+function newRow(product?: ZcProduct): BatchRow {
+  const specIndex = createDefaultSpecIndex(product)
+  return {
+    specIndex,
+    inboundPrice: getSpecInboundPrice(specIndex),
+    inboundQuantity: undefined,
+    note: '',
+  }
 }
 
 function handleItemClick(item: ZcProduct) {
   currentProduct.value = item
-  batches.value = [newRow(item.inboundPrice)]
+  initSpecOptions(item)
+  batches.value = [newRow(item)]
   supplierIndex.value = null
   showPopup.value = true
 }
@@ -125,10 +196,11 @@ function handleItemClick(item: ZcProduct) {
 function handleClosePopup() {
   showPopup.value = false
   currentProduct.value = null
+  specOptions.value = []
 }
 
 function addBatch() {
-  batches.value.push(newRow(currentProduct.value?.inboundPrice))
+  batches.value.push(newRow())
 }
 
 function removeBatch(index: number) {
@@ -141,6 +213,10 @@ async function handleSubmit() {
 
   for (let i = 0; i < batches.value.length; i++) {
     const b = batches.value[i]
+    if (!getBatchSpec(b)) {
+      uni.showToast({ title: `第 ${i + 1} 条批次请选择规格`, icon: 'none' })
+      return
+    }
     if (!b.inboundQuantity || b.inboundQuantity <= 0) {
       uni.showToast({ title: `第 ${i + 1} 条批次请填写入库数量`, icon: 'none' })
       return
@@ -160,6 +236,7 @@ async function handleSubmit() {
         warehouseId: warehouseList.value[warehouseIndex.value]?.id,
         supplierId: supplierIndex.value !== null ? supplierList.value[supplierIndex.value]?.id : undefined,
         note: b.note || undefined,
+        spec: getBatchSpec(b)!.spec,
       })),
     )
     uni.showToast({ title: '入库成功', icon: 'success' })
@@ -201,6 +278,28 @@ onMounted(() => {
       </view>
     </view>
 
+    <!-- 版本筛选 -->
+    <view class="filter-bar">
+      <view class="filter-cell">
+        <text class="filter-label">版本</text>
+        <picker
+          mode="selector"
+          :range="versionList"
+          range-key="name"
+          :value="versionIndex ?? 0"
+          @change="onVersionChange"
+        >
+          <view class="filter-trigger">
+            <text class="filter-value" :class="{ placeholder: versionIndex === null }">
+              {{ versionIndex !== null ? (versionList[versionIndex]?.name || '全部') : '全部版本' }}
+            </text>
+            <text class="filter-arrow">▾</text>
+          </view>
+        </picker>
+        <text v-if="versionIndex !== null" class="filter-clear" @click.stop="clearVersion">✕</text>
+      </view>
+    </view>
+
     <!-- 产品列表 -->
     <view class="p-24rpx">
       <view
@@ -233,14 +332,6 @@ onMounted(() => {
               </view>
               <view class="value">
                 {{ item.supplierName || '-' }}
-              </view>
-            </view>
-            <view class="info-item">
-              <view class="label">
-                规格:
-              </view>
-              <view class="value">
-                {{ item.specValue || '-' }}
               </view>
             </view>
             <view class="info-item">
@@ -297,10 +388,6 @@ onMounted(() => {
             <view class="meta-item">
               <text class="meta-label">供应商</text>
               <text class="meta-value">{{ currentProduct.supplierName || '-' }}</text>
-            </view>
-            <view class="meta-item">
-              <text class="meta-label">规格</text>
-              <text class="meta-value">{{ currentProduct.specValue || '-' }}</text>
             </view>
             <view class="meta-item">
               <text class="meta-label">单位</text>
@@ -367,34 +454,58 @@ onMounted(() => {
               </view>
             </view>
 
-            <!-- 第一行：数量 + 进货价 -->
-            <view class="batch-row">
-              <view class="batch-field">
-                <view class="field-label required">
-                  数量
+            <!-- 规格 + 数量 + 进货价 -->
+            <view class="batch-row batch-fields-row">
+              <view class="top-field">
+                <view class="field-label-top required">
+                  规格
                 </view>
-                <input
-                  v-model.number="batch.inboundQuantity"
-                  type="digit"
-                  class="field-input"
-                  placeholder="入库数量"
+                <picker
+                  v-if="specOptions.length > 1"
+                  mode="selector"
+                  :range="specOptions"
+                  range-key="spec"
+                  :value="batch.specIndex ?? 0"
+                  @change="onSpecChange($event, index)"
                 >
+                  <view class="top-field-picker">
+                    <text class="top-field-text" :class="{ placeholder: batch.specIndex === null }">
+                      {{ batch.specIndex !== null ? (specOptions[batch.specIndex]?.spec || '请选择') : '请选择' }}
+                    </text>
+                    <text class="filter-arrow">▾</text>
+                  </view>
+                </picker>
+                <view v-else class="top-field-picker readonly">
+                  <text class="top-field-text" :class="{ placeholder: !specOptions.length }">
+                    {{ specOptions[0]?.spec || '暂无规格' }}
+                  </text>
+                </view>
               </view>
-              <view class="batch-field-divider" />
-              <view class="batch-field">
-                <view class="field-label">
+              <view class="top-field">
+                <view class="field-label-top">
                   进货价
                 </view>
                 <input
                   v-model.number="batch.inboundPrice"
                   type="digit"
-                  class="field-input"
+                  class="top-field-input"
                   placeholder="进货价"
+                >
+              </view>
+              <view class="top-field">
+                <view class="field-label-top required">
+                  数量
+                </view>
+                <input
+                  v-model.number="batch.inboundQuantity"
+                  type="digit"
+                  class="top-field-input"
+                  placeholder="数量"
                 >
               </view>
             </view>
 
-            <!-- 第二行：备注 -->
+            <!-- 备注 -->
             <view class="batch-row note-row">
               <view class="field-label">
                 备注
@@ -464,6 +575,64 @@ onMounted(() => {
   font-weight: 500;
   color: #fff;
   background-color: #1890ff;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  background-color: #fff;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.filter-cell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.filter-label {
+  font-size: 26rpx;
+  color: #999;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.filter-trigger {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.filter-value {
+  font-size: 26rpx;
+  color: #333;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.placeholder {
+    color: #bbb;
+  }
+}
+
+.filter-arrow {
+  font-size: 20rpx;
+  color: #bbb;
+  flex-shrink: 0;
+  margin-left: 4rpx;
+}
+
+.filter-clear {
+  font-size: 22rpx;
+  color: #bbb;
+  flex-shrink: 0;
+  padding: 4rpx 8rpx;
 }
 
 .inventory-btn {
@@ -677,9 +846,81 @@ onMounted(() => {
     border-bottom: none;
   }
 
+  &.batch-fields-row {
+    align-items: flex-start;
+    gap: 12rpx;
+    padding: 16rpx 4rpx;
+  }
+
   &.note-row {
     gap: 12rpx;
     padding: 0 4rpx;
+  }
+}
+
+.top-field {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.field-label-top {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.2;
+
+  &.required::before {
+    content: '*';
+    color: #ff4d4f;
+    margin-right: 2rpx;
+  }
+}
+
+.top-field-input {
+  width: 100%;
+  height: 64rpx;
+  padding: 0 12rpx;
+  font-size: 26rpx;
+  color: #333;
+  border: 1rpx solid #ddd;
+  border-radius: 8rpx;
+  background-color: #fafafa;
+  box-sizing: border-box;
+
+  &::placeholder {
+    color: #ccc;
+  }
+}
+
+.top-field-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64rpx;
+  padding: 0 12rpx;
+  border: 1rpx solid #ddd;
+  border-radius: 8rpx;
+  background-color: #fafafa;
+  box-sizing: border-box;
+
+  &.readonly {
+    background-color: #f5f5f5;
+  }
+}
+
+.top-field-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.placeholder {
+    color: #ccc;
   }
 }
 

@@ -7,7 +7,7 @@ import { onReachBottom } from '@dcloudio/uni-app'
 import { onMounted, ref } from 'vue'
 import { createBarcodeRegistry } from '@/api/curtain/barcode-registry'
 import { createInventoryRecord } from '@/api/curtain/inventory-record'
-import { getProductBatchPage } from '@/api/curtain/product'
+import { getProductBatchPage, getProductBatchStatusColorType, getProductBatchStatusLabel } from '@/api/curtain/product'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
 import { useDictStore } from '@/store/dict'
@@ -265,13 +265,13 @@ onMounted(() => {
         :key="item.id"
         class="batch-card"
       >
-        <!-- 顶部行：批号 + 日期 -->
+        <!-- 顶部行：批号 + 状态 -->
         <view class="card-header">
           <view class="batch-no">
             {{ item.batchNo || `批次 #${item.id}` }}
           </view>
-          <view class="inbound-date">
-            {{ item.inboundDate || '-' }}
+          <view class="batch-status" :class="`status-${getProductBatchStatusColorType(item.status)}`">
+            {{ getProductBatchStatusLabel(item.status) }}
           </view>
         </view>
 
@@ -530,8 +530,30 @@ onMounted(() => {
   color: #222;
 }
 
-.inbound-date {
+.batch-status {
+  padding: 4rpx 14rpx;
+  border-radius: 4rpx;
   font-size: 24rpx;
+  font-weight: 500;
+}
+
+.status-warning {
+  background-color: #fff7e6;
+  color: #faad14;
+}
+
+.status-info {
+  background-color: #e6fffb;
+  color: #13c2c2;
+}
+
+.status-success {
+  background-color: #f6ffed;
+  color: #52c41a;
+}
+
+.status-default {
+  background-color: #f5f5f5;
   color: #999;
 }
 
