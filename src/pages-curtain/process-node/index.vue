@@ -50,7 +50,59 @@ let scanBuffer = ''
 let scanTimer: ReturnType<typeof setTimeout> | null = null
 let scannerListenerBound = false
 let pendingScanCode = ''
-let scannerListenerTarget: 'window' | 'document' | null = null
+let scannerListenerTarget: 'window' | 'document' | 'plus' | null = null
+
+/** Android 扫码枪 US Keyboard 模式 keyCode → 字符（APP 端 plus.key 事件无 e.key 时使用） */
+const ANDROID_KEYCODE_CHAR: Record<number, string> = {
+  7: '0',
+  8: '1',
+  9: '2',
+  10: '3',
+  11: '4',
+  12: '5',
+  13: '6',
+  14: '7',
+  15: '8',
+  16: '9',
+  29: 'A',
+  30: 'B',
+  31: 'C',
+  32: 'D',
+  33: 'E',
+  34: 'F',
+  35: 'G',
+  36: 'H',
+  37: 'I',
+  38: 'J',
+  39: 'K',
+  40: 'L',
+  41: 'M',
+  42: 'N',
+  43: 'O',
+  44: 'P',
+  45: 'Q',
+  46: 'R',
+  47: 'S',
+  48: 'T',
+  49: 'U',
+  50: 'V',
+  51: 'W',
+  52: 'X',
+  53: 'Y',
+  54: 'Z',
+  69: '-',
+  189: '-',
+}
+
+const BARCODE_CODE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isBarcodeCodeId(val: string): boolean {
+  return BARCODE_CODE_ID_RE.test(val)
+}
+
+function keyCodeToChar(keyCode: number): string {
+  return ANDROID_KEYCODE_CHAR[keyCode] ?? ''
+}
 
 type DeliveryLevel = 'overdue' | 'today' | 'soon' | 'normal'
 type ScanState = 'IDLE' | 'ORDER_LOADED' | 'STRUCT_SELECTED' | 'NODE_SELECTED' | 'READY_TO_COMMIT'
@@ -323,6 +375,12 @@ async function handleInputConfirm() {
   const val = orderNo.value.trim()
   if (!val)
     return
+  // APP 端扫码枪常把内容注入到 input，需按条码 ID 解析而非订单号查询
+  if (isBarcodeCodeId(val)) {
+    orderNo.value = ''
+    await handleScanCode(val)
+    return
+  }
   await handleOrderSearch()
 }
 
@@ -388,6 +446,16 @@ function flushScanBuffer() {
     void handleScanCode(current)
 }
 
+function appendScanChar(key: string, e?: any) {
+  if (!isPrintableScanChar(key, e ?? {}))
+    return
+  scanBuffer += key
+  clearScanTimer()
+  scanTimer = setTimeout(() => {
+    flushScanBuffer()
+  }, SCAN_END_DELAY)
+}
+
 function handleGlobalKeydown(e: any) {
   if (e?.isComposing)
     return
@@ -401,20 +469,28 @@ function handleGlobalKeydown(e: any) {
     return
   }
 
-  if (!isPrintableScanChar(key, e))
-    return
+  appendScanChar(key, e)
+}
 
-  scanBuffer += key
-  clearScanTimer()
-  scanTimer = setTimeout(() => {
+/** APP 端扫码枪键盘事件（plus.key，document/window 在 WebView 中不可用） */
+function handlePlusKeyup(e: any) {
+  const keyCode = Number(e?.keyCode)
+  if (keyCode === 66 || e?.key === 'Enter') {
     flushScanBuffer()
-  }, SCAN_END_DELAY)
+    return
+  }
+  let key = typeof e?.key === 'string' && e.key.length === 1 ? e.key : ''
+  if (!key && keyCode)
+    key = keyCodeToChar(keyCode)
+  if (!key)
+    return
+  appendScanChar(key, e)
 }
 
 function bindScannerListener() {
   if (scannerListenerBound)
     return
-  // 只绑定一个目标，避免同一事件在 document/window 双通道重复采集
+  // 只绑定一个目标，避免同一事件双通道重复采集
   // #ifdef H5
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', handleGlobalKeydown, true)
@@ -424,10 +500,10 @@ function bindScannerListener() {
     scannerListenerTarget = 'document'
   }
   // #endif
-  // #ifndef H5
-  if (typeof document !== 'undefined') {
-    document.addEventListener('keydown', handleGlobalKeydown, true)
-    scannerListenerTarget = 'document'
+  // #ifdef APP-PLUS
+  if (typeof plus !== 'undefined' && plus.key) {
+    plus.key.addEventListener('keyup', handlePlusKeyup)
+    scannerListenerTarget = 'plus'
   }
   // #endif
   scannerListenerBound = true
@@ -441,6 +517,10 @@ function unbindScannerListener() {
     window.removeEventListener('keydown', handleGlobalKeydown, true)
   else if (scannerListenerTarget === 'document' && typeof document !== 'undefined')
     document.removeEventListener('keydown', handleGlobalKeydown, true)
+  // #ifdef APP-PLUS
+  else if (scannerListenerTarget === 'plus' && typeof plus !== 'undefined' && plus.key)
+    plus.key.removeEventListener('keyup', handlePlusKeyup)
+  // #endif
 
   scannerListenerBound = false
   scannerListenerTarget = null
