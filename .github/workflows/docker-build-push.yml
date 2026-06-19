@@ -20,11 +20,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  REGISTRY: docker.io
-  # 镜像仓库名（不含用户名），最终镜像为 DOCKERHUB_USERNAME/yudao-ui-admin-uniapp
-  IMAGE_REPO: yudao-ui-admin-uniapp
-
 jobs:
   # ─────────────────────────────────────────────
   # 1. 构建预检
@@ -67,9 +62,9 @@ jobs:
     if: always() && (needs.lint.result == 'success' || needs.lint.result == 'skipped')
     env:
       # 镜像命名空间必须与 DOCKERHUB_USERNAME 一致，否则推送会 401
-      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_REPO }}
+      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/yudao-ui-admin-uniapp
     outputs:
-      image_full: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+      image_full: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/yudao-ui-admin-uniapp:${{ steps.meta.outputs.version }}
       image_tag: ${{ steps.meta.outputs.version }}
     steps:
       - name: 检出代码
