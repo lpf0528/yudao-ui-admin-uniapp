@@ -50,8 +50,20 @@ async function handleRefresh() {
   }
 }
 
-onMounted(() => {
-  loadUserList()
+async function initLoad() {
+  try {
+    await loadUserList()
+  } catch {
+    // http 层已 toast，此处避免 Uncaught (in promise)
+  }
+}
+
+/**
+ * 初始化操作员列表
+ * 不使用 onMounted：登录后页面可能已挂载，需在 onShow 时重新拉取
+ */
+onShow(() => {
+  initLoad()
 })
 
 function openPicker(target: 'primary' | 'secondary') {

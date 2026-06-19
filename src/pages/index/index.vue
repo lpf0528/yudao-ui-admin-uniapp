@@ -136,7 +136,7 @@ function handleScanCode() {
   // #endif
 
   // #ifdef H5
-  handleSimulateScan()
+  handleSimulateScan().catch(() => {})
   // #endif
 }
 
