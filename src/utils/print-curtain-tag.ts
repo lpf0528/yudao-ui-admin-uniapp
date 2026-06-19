@@ -21,7 +21,10 @@ export const CURTAIN_PRINT_CANVAS_W = 300
 const QR_SIZE = 110
 const MARGIN_PX = Math.round(5 / 57 * CURTAIN_PRINT_CANVAS_W)
 const MARGIN_2MM_PX = Math.round(2 / 57 * CURTAIN_PRINT_CANVAS_W)
-const TITLE_Y = MARGIN_PX + 20
+const TITLE_FONT_SIZE = 18
+const BODY_FONT_SIZE = 16
+const LINE_HEIGHT = 28
+const TITLE_Y = MARGIN_PX + 16
 
 // #ifdef APP-PLUS
 const PRINT_WIDTH = 456
@@ -65,7 +68,7 @@ function drawDashedLine(ctx: any, y: number) {
 }
 
 export function calculateCurtainPrintCanvasHeight(data: CurtainPrintData): number {
-  const lh = 34
+  const lh = LINE_HEIGHT
   let ty = TITLE_Y + lh
 
   ty += lh * 4
@@ -108,7 +111,7 @@ export function drawCurtainPrintLabel(
     drawDashedLine(ctx, MARGIN_2MM_PX)
 
     ctx.setFillStyle('#000000')
-    ctx.setFontSize(22)
+    ctx.setFontSize(TITLE_FONT_SIZE)
     ctx.setTextAlign('center')
     ctx.fillText('打包标签', CURTAIN_PRINT_CANVAS_W / 2, TITLE_Y)
     ctx.setTextAlign('left')
@@ -116,11 +119,11 @@ export function drawCurtainPrintLabel(
     drawDashedLine(ctx, canvasHeight - MARGIN_2MM_PX)
 
     const tx = 16
-    const lh = 34
+    const lh = LINE_HEIGHT
     let ty = TITLE_Y + lh
 
     ctx.setFillStyle('#000000')
-    ctx.setFontSize(20)
+    ctx.setFontSize(BODY_FONT_SIZE)
     ctx.fillText(`订单号：${safe(data.orderNo) || '-'}`, tx, ty); ty += lh
     ctx.fillText(`客户名称：${safe(data.customerName) || '-'}`, tx, ty); ty += lh
     ctx.fillText(`收货人：${safe(data.receiver) || '-'}`, tx, ty); ty += lh
@@ -150,7 +153,7 @@ export function drawCurtainPrintLabel(
 
       hasDrawnMats = true
 
-      ctx.setFontSize(20)
+      ctx.setFontSize(BODY_FONT_SIZE)
       ctx.setFillStyle('#000000')
       ctx.fillText(safe(structure.structureName) || '-', tx, ty)
       ty += lh

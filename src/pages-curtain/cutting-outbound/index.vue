@@ -17,11 +17,18 @@ import {
   CUT_PRINT_CANVAS_W,
   printCutLabel,
 } from '@/utils/print-cut-label'
+import {
+  calculateProductLabelCanvasHeight,
+  printProductLabel,
+  PRODUCT_LABEL_CANVAS_W,
+} from '@/utils/print-product-label'
 
 const dictStore = useDictStore()
 const operatorStore = useOperatorStore()
 const instance = getCurrentInstance()
 const printCutCanvasHeight = ref(0)
+const printLabelCanvasHeight = ref(0)
+const printingLabelId = ref<number | null>(null)
 
 function requirePrimaryOperator(): boolean {
   if (operatorStore.primaryOperator)
@@ -240,27 +247,34 @@ function handleViewCuttingRecords(item: ZcProductBatch) {
 }
 
 async function handlePrintLabel(item: ZcProductBatch) {
-  uni.showLoading({ title: '生成二维码…', mask: true })
+  printingLabelId.value = item.id
+  uni.showLoading({ title: '正在打印…', mask: true })
   try {
     const codeId = await createBarcodeRegistry({
       codeType: 'BATCH_QR',
       targetRoute: '/pages-curtain/product-inbound/inventory/index',
       codeContent: { productId: item.productId, batchNo: item.batchNo },
     })
-    const enc = encodeURIComponent
-    const query = `batchId=${item.id}`
-      + `&batchNo=${enc(item.batchNo || String(item.id))}`
-      + `&qrCode=${enc(codeId)}`
-      + `&productName=${enc(item.productName || '')}`
-      + `&warehouse=${enc(item.warehouseName || '')}`
-      + `&versionName=${enc(item.versionName || '')}`
-      + `&specValue=${enc(item.specValue || '')}`
-      + `&quantity=${enc(String(item.quantity ?? ''))}`
-      + `&note=${enc(item.note || '')}`
-    uni.navigateTo({ url: `/pages-curtain/product-inbound/print-label/index?${query}` })
-  } catch {
-    uni.showToast({ title: '生成二维码失败，请重试', icon: 'none' })
+    const printData = {
+      batchNo: item.batchNo || String(item.id),
+      qrCode: codeId,
+      productName: item.productName || '',
+      warehouse: item.warehouseName || '',
+      versionName: item.versionName || '',
+      specValue: item.spec || '',
+      quantity: String(item.quantity ?? ''),
+      note: item.note || '',
+    }
+    printLabelCanvasHeight.value = calculateProductLabelCanvasHeight(printData)
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 150))
+    await printProductLabel(printData, 'product-label-print-canvas', instance?.proxy)
+    uni.showToast({ title: '已发送至打印机 ✓', icon: 'success' })
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '打印失败，请重试', icon: 'none', duration: 3000 })
   } finally {
+    printLabelCanvasHeight.value = 0
+    printingLabelId.value = null
     uni.hideLoading()
   }
 }
@@ -636,8 +650,12 @@ onMounted(() => {
             <view class="action-btn record-btn" @click.stop="handleViewCuttingRecords(item)">
               裁剪记录
             </view>
-            <view class="action-btn print-btn" @click.stop="handlePrintLabel(item)">
-              打印标签
+            <view
+              class="action-btn print-btn"
+              :class="{ disabled: printingLabelId === item.id }"
+              @click.stop="handlePrintLabel(item)"
+            >
+              {{ printingLabelId === item.id ? '打印中…' : '打印标签' }}
             </view>
           </view>
         </view>
@@ -804,6 +822,13 @@ onMounted(() => {
       canvas-id="cut-print-canvas"
       class="hidden-print-canvas"
       :style="`width:${CUT_PRINT_CANVAS_W}px;height:${printCutCanvasHeight}px;`"
+    />
+    <!-- 隐藏 canvas，打印布匹标签用 -->
+    <canvas
+      v-if="printLabelCanvasHeight > 0"
+      canvas-id="product-label-print-canvas"
+      class="hidden-print-canvas"
+      :style="`width:${PRODUCT_LABEL_CANVAS_W}px;height:${printLabelCanvasHeight}px;`"
     />
   </view>
 </template>
