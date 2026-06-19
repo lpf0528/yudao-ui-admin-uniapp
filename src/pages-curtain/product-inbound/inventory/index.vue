@@ -181,7 +181,7 @@ async function handlePrintLabel(item: ZcProductBatch) {
       + `&productName=${enc(item.productName || '')}`
       + `&warehouse=${enc(item.warehouseName || '')}`
       + `&versionName=${enc(item.versionName || '')}`
-      + `&specValue=${enc(item.specValue || '')}`
+      + `&spec=${enc(item.spec || '')}`
       + `&quantity=${enc(String(item.quantity ?? ''))}`
       + `&note=${enc(item.note || '')}`
     uni.navigateTo({ url: `/pages-curtain/product-inbound/print-label/index?${query}` })
@@ -302,7 +302,7 @@ onMounted(() => {
               规格
             </view>
             <view class="qty-value">
-              {{ item.specValue || '-' }}
+              {{ item.spec || '-' }}
             </view>
           </view>
         </view>
