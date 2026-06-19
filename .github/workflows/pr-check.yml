@@ -1,0 +1,47 @@
+name: PR 预检
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - '**.md'
+      - '.image/**'
+      - 'docs/**'
+
+jobs:
+  check:
+    name: 构建验证
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 生成基础配置文件
+        run: pnpm init-baseFiles
+
+      - name: H5 生产构建
+        run: pnpm build:h5
+
+      - name: 验证产物存在
+        run: |
+          test -f dist/build/h5/index.html || (echo "❌ H5 构建产物不存在" && exit 1)
+          echo "✅ H5 构建成功，产物大小："
+          du -sh dist/build/h5/

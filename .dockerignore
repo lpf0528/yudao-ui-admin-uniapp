@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+.github
+.github2
+.husky
+.cursor
+.vscode
+docs
+*.md
+.env.local
+.env.*.local
