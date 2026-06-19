@@ -78,7 +78,7 @@ export interface ZcProductBatchSaveReq {
 }
 
 export function createProductBatchList(data: ZcProductBatchSaveReq[]) {
-  return httpPost<number[]>('/zc/product-batch/create-batch', data)
+  return httpPost<ZcProductBatch[]>('/zc/product-batch/create-batch', data)
 }
 
 export interface ZcProductBatch {
@@ -100,6 +100,8 @@ export interface ZcProductBatch {
   supplierName: string
   warehouseName: string
   unitValue: string
+  onePrice?: number
+  barcode?: string
   createTime: string
 }
 

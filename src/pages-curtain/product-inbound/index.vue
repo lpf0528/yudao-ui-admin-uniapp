@@ -1,17 +1,26 @@
 <script setup lang="ts">
-import type { ZcProduct } from '@/api/curtain/product'
+import type { ZcProduct, ZcProductBatch } from '@/api/curtain/product'
 import type { ZcProductVersionSimple, ZcProductVersionSpecResp } from '@/api/curtain/product-version'
 import type { ZcSupplierSimple } from '@/api/curtain/supplier'
 import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
 import { onReachBottom } from '@dcloudio/uni-app'
-import { onMounted, ref } from 'vue'
+import { getCurrentInstance, nextTick, onMounted, ref } from 'vue'
+import { createBarcodeRegistry } from '@/api/curtain/barcode-registry'
 import { createProductBatchList, getProductPage } from '@/api/curtain/product'
 import { getProductVersionSimpleList } from '@/api/curtain/product-version'
 import { getSupplierSimpleList } from '@/api/curtain/supplier'
 import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
+import {
+  calculateProductLabelCanvasHeight,
+  printProductLabel,
+  PRODUCT_LABEL_CANVAS_W,
+} from '@/utils/print-product-label'
+
+const instance = getCurrentInstance()
+const printLabelCanvasHeight = ref(0)
 
 const dictStore = useDictStore()
 
@@ -207,6 +216,63 @@ function removeBatch(index: number) {
   batches.value.splice(index, 1)
 }
 
+async function printBatchLabels(createdBatches: ZcProductBatch[]) {
+  const count = createdBatches.length
+  if (!count)
+    return
+
+  // #ifndef APP-PLUS
+  uni.showToast({
+    title: `入库成功，共 ${count} 批（当前环境不支持打印）`,
+    icon: 'none',
+    duration: 3000,
+  })
+  return
+  // #endif
+
+  // #ifdef APP-PLUS
+  uni.showLoading({ title: `入库成功，正在打印 1/${count}…`, mask: true })
+  try {
+    for (let i = 0; i < count; i++) {
+      const item = createdBatches[i]
+      uni.showLoading({ title: `入库成功，正在打印 ${i + 1}/${count}…`, mask: true })
+      const codeId = await createBarcodeRegistry({
+        codeType: 'BATCH_QR',
+        targetRoute: '/pages-curtain/product-inbound/inventory/index',
+        codeContent: { productId: item.productId, batchNo: item.batchNo },
+      })
+      const printData = {
+        batchNo: item.batchNo || String(item.id),
+        qrCode: codeId,
+        productName: item.productName || '',
+        warehouse: item.warehouseName || '',
+        versionName: item.versionName || '',
+        specValue: item.spec || '',
+        quantity: String(item.quantity ?? ''),
+        note: item.note || '',
+      }
+      printLabelCanvasHeight.value = calculateProductLabelCanvasHeight(printData)
+      await nextTick()
+      await new Promise(resolve => setTimeout(resolve, 150))
+      await printProductLabel(printData, 'product-label-print-canvas', instance?.proxy)
+      printLabelCanvasHeight.value = 0
+      if (i < count - 1)
+        await new Promise(resolve => setTimeout(resolve, 300))
+    }
+    uni.showToast({ title: `入库成功，已打印 ${count} 张标签 ✓`, icon: 'success', duration: 2500 })
+  } catch (e: any) {
+    uni.showToast({
+      title: e.message || '标签打印失败，请至库存页补打',
+      icon: 'none',
+      duration: 3000,
+    })
+  } finally {
+    printLabelCanvasHeight.value = 0
+    uni.hideLoading()
+  }
+  // #endif
+}
+
 async function handleSubmit() {
   if (!currentProduct.value)
     return
@@ -226,7 +292,7 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const today = new Date().toISOString().slice(0, 10)
-    await createProductBatchList(
+    const createdBatches = await createProductBatchList(
       batches.value.map(b => ({
         productId: currentProduct.value!.id,
         inboundDate: today,
@@ -239,8 +305,8 @@ async function handleSubmit() {
         spec: getBatchSpec(b)!.spec,
       })),
     )
-    uni.showToast({ title: '入库成功', icon: 'success' })
     handleClosePopup()
+    await printBatchLabels(createdBatches)
   } catch {
     uni.showToast({ title: '入库失败，请重试', icon: 'none' })
   } finally {
@@ -537,10 +603,26 @@ onMounted(() => {
         </view>
       </view>
     </wd-popup>
+
+    <!-- 隐藏 canvas，入库成功后直接打印标签 -->
+    <canvas
+      v-if="printLabelCanvasHeight > 0"
+      canvas-id="product-label-print-canvas"
+      class="hidden-print-canvas"
+      :style="`width:${PRODUCT_LABEL_CANVAS_W}px;height:${printLabelCanvasHeight}px;`"
+    />
   </view>
 </template>
 
 <style lang="scss" scoped>
+.hidden-print-canvas {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .search-bar {
   display: flex;
   align-items: center;

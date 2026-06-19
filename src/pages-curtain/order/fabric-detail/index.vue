@@ -7,6 +7,7 @@ import { cancelShipSalesOrderCurtain, completeSalesOrder, getSalesOrderDetail, s
 import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
+import { printDeliverySlip } from '@/utils/print-delivery-slip'
 
 interface FabricMaterialRow extends SalesOrderMaterialDetail {
   curtainId: number
@@ -147,6 +148,7 @@ function getBatchStatusColorType(val: string) {
 }
 
 const completing = ref(false)
+const printingDelivery = ref(false)
 
 async function handleComplete() {
   confirmAction(
@@ -165,10 +167,20 @@ async function handleComplete() {
   )
 }
 
-function openPrintDelivery() {
-  uni.navigateTo({
-    url: `/pages-curtain/order/print-delivery/index?orderId=${encodeURIComponent(props.id)}`,
-  })
+async function handlePrintDelivery() {
+  if (!detail.value)
+    return
+  printingDelivery.value = true
+  uni.showLoading({ title: '正在打印…', mask: true })
+  try {
+    await printDeliverySlip(detail.value)
+    uni.showToast({ title: '已发送至打印机 ✓', icon: 'success' })
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '打印失败', icon: 'none', duration: 3000 })
+  } finally {
+    printingDelivery.value = false
+    uni.hideLoading()
+  }
 }
 
 function goInventory(line: FabricMaterialRow) {
@@ -345,7 +357,7 @@ onShow(loadDetail)
 
       <!-- 产品明细操作区 -->
       <view class="mx-24rpx mb-0 flex items-center justify-end gap-16rpx rounded-t-12rpx bg-white px-24rpx py-16rpx">
-        <wd-button type="info" size="small" @click="openPrintDelivery">
+        <wd-button type="info" size="small" :loading="printingDelivery" @click="handlePrintDelivery">
           打印发货联
         </wd-button>
         <wd-button

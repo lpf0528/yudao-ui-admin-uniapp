@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import type { SalesOrderCurtainDetail } from '@/api/curtain/order'
-import qrcode from 'qrcode-generator'
+import type { CurtainPrintData } from '@/utils/print-curtain-tag'
 import { getCurrentInstance, nextTick, onMounted, ref } from 'vue'
 import { getSalesOrderDetail } from '@/api/curtain/order'
 import { useDictStore } from '@/store/dict'
-// #ifdef APP-PLUS
-import { LineApi, PrinterSdk } from '@/uni_modules/sunmi-printersdk'
 import { navigateBackPlus } from '@/utils'
-// #endif
+import {
+  calculateCurtainPrintCanvasHeight,
+  CURTAIN_PRINT_CANVAS_W,
+  drawCurtainPrintLabel,
+  printCurtainTagToDevice,
+} from '@/utils/print-curtain-tag'
 
 definePage({
   style: {
@@ -16,196 +18,43 @@ definePage({
   },
 })
 
-const CANVAS_W = 300
-const QR_SIZE = 110
-const MARGIN_PX = Math.round(5 / 57 * CANVAS_W) // 5mm ≈ 26px
-const MARGIN_2MM_PX = Math.round(2 / 57 * CANVAS_W) // 2mm ≈ 11px
-const TITLE_Y = MARGIN_PX + 20
-
 const instance = getCurrentInstance()
 const dictStore = useDictStore()
 
-const code = ref('')
-const orderNo = ref('')
-const customerName = ref('')
-const receiver = ref('')
-const orderDate = ref('')
-const curtainIndex = ref(0)
-const totalSets = ref(0)
-const orderId = ref(0)
-const curtainId = ref(0)
-const curtainDetail = ref<SalesOrderCurtainDetail | null>(null)
+const printData = ref<CurtainPrintData>({
+  code: '',
+  orderNo: '',
+  customerName: '',
+  receiver: '',
+  orderDate: '',
+  curtainIndex: 0,
+  totalSets: 0,
+  curtainDetail: null,
+  getUnitLabel: (val: string) => dictStore.getDictData('zc_product_unit', val)?.label ?? val ?? '',
+})
 const canvasHeight = ref(400)
 const drawn = ref(false)
 const saving = ref(false)
+const pageOrderId = ref(0)
+const pageCurtainId = ref(0)
 
-function getUnitLabel(val: string) {
-  return dictStore.getDictData('zc_product_unit', val)?.label ?? val ?? ''
-}
-
-function safe(val: string | null | undefined): string {
-  if (!val || val === 'null' || val === 'undefined')
-    return ''
-  return val
-}
-
-function drawDashedLine(ctx: any, y: number) {
-  const dashLen = 8
-  const gap = 5
-  ctx.setStrokeStyle('#aaaaaa')
-  ctx.setLineWidth(1)
-  let x = 8
-  while (x < CANVAS_W - 8) {
-    ctx.beginPath()
-    ctx.moveTo(x, y)
-    ctx.lineTo(Math.min(x + dashLen, CANVAS_W - 8), y)
-    ctx.stroke()
-    x += dashLen + gap
-  }
-}
-
-function calculateCanvasHeight(): number {
-  const lh = 34
-  let ty = TITLE_Y + lh // 内容区起始（标题下方）
-
-  ty += lh * 4 // 订单编号、客户名称、收货人、下单日期
-
-  if (safe(curtainDetail.value?.curtainName))
-    ty += lh
-
-  ty += lh // 套数行
-  ty += 10 // 分割线1
-
-  let hasContent = false
-  for (const s of curtainDetail.value?.structures ?? []) {
-    const printMats = s.materials.filter(m => m.elementIsPrint)
-    if (!printMats.length)
-      continue
-    hasContent = true
-    ty += lh // structure name
-    ty += printMats.length * lh // material lines
-    ty += 4 // gap
-  }
-  if (hasContent)
-    ty += 10 // 分割线2
-
-  ty += QR_SIZE + MARGIN_PX // 二维码 + 下边距
-  return Math.max(ty, 420)
-}
-
-function drawLabel() {
-  if (!code.value)
+async function drawLabel() {
+  if (!printData.value.code)
     return
-
-  const ctx = uni.createCanvasContext('curtain-tag-canvas', instance?.proxy)
-
-  ctx.setFillStyle('#ffffff')
-  ctx.fillRect(0, 0, CANVAS_W, canvasHeight.value)
-
-  // 顶部虚线（2mm）
-  drawDashedLine(ctx, MARGIN_2MM_PX)
-
-  // 抬头标题
-  ctx.setFillStyle('#000000')
-  ctx.setFontSize(22)
-  ctx.setTextAlign('center')
-  ctx.fillText('打包标签', CANVAS_W / 2, TITLE_Y)
-  ctx.setTextAlign('left')
-
-  // 底部虚线（2mm）
-  drawDashedLine(ctx, canvasHeight.value - MARGIN_2MM_PX)
-
-  const tx = 16
-  const lh = 34
-  let ty = TITLE_Y + lh // 内容区起始
-
-  ctx.setFillStyle('#000000')
-  ctx.setFontSize(20)
-  ctx.fillText(`订单号：${safe(orderNo.value) || '-'}`, tx, ty); ty += lh
-  ctx.fillText(`客户名称：${safe(customerName.value) || '-'}`, tx, ty); ty += lh
-  ctx.fillText(`收货人：${safe(receiver.value) || '-'}`, tx, ty); ty += lh
-  ctx.fillText(`下单日期：${safe(orderDate.value) || '-'}`, tx, ty); ty += lh
-
-  const curtainName = safe(curtainDetail.value?.curtainName)
-  if (curtainName) {
-    ctx.fillText(`窗帘名称：${curtainName}`, tx, ty); ty += lh
-  }
-
-  ctx.fillText(`第 ${curtainIndex.value} 套 / 共 ${totalSets.value} 套`, tx, ty)
-  ty += lh
-
-  // 分割线 1
-  ctx.setStrokeStyle('#dddddd')
-  ctx.setLineWidth(1)
-  ctx.beginPath()
-  ctx.moveTo(16, ty)
-  ctx.lineTo(CANVAS_W - 16, ty)
-  ctx.stroke()
-  ty += 10
-
-  // 结构 + 用料（仅 elementIsPrint=true）
-  let hasDrawnMats = false
-  for (const structure of curtainDetail.value?.structures ?? []) {
-    const printMats = structure.materials.filter(m => m.elementIsPrint)
-    if (!printMats.length)
-      continue
-
-    hasDrawnMats = true
-
-    ctx.setFontSize(20)
-    ctx.setFillStyle('#000000')
-    ctx.fillText(safe(structure.structureName) || '-', tx, ty)
-    ty += lh
-
-    for (const mat of printMats) {
-      const name = `${safe(mat.elementName) || ''}：${safe(mat.productName) || ''}`
-      ctx.fillText(`· ${name}  ${mat.quantity ?? 0}${getUnitLabel(mat.unitValue)}`, tx, ty)
-      ty += lh
-    }
-    ty += 4
-  }
-
-  if (hasDrawnMats) {
-    // 分割线 2
-    ctx.setStrokeStyle('#dddddd')
-    ctx.setLineWidth(1)
-    ctx.beginPath()
-    ctx.moveTo(16, ty)
-    ctx.lineTo(CANVAS_W - 16, ty)
-    ctx.stroke()
-    ty += 10
-  }
-
-  // 二维码（居中）
-  const qr = qrcode(0, 'M')
-  qr.addData(code.value)
-  qr.make()
-  const count = qr.getModuleCount()
-  const cell = QR_SIZE / count
-  const qrX = (CANVAS_W - QR_SIZE) / 2
-  ctx.setFillStyle('#000000')
-  for (let r = 0; r < count; r++) {
-    for (let c = 0; c < count; c++) {
-      if (qr.isDark(r, c))
-        ctx.fillRect(qrX + c * cell, ty + r * cell, cell, cell)
-    }
-  }
-
-  ctx.draw(false, () => {
-    drawn.value = true
-  })
+  await drawCurtainPrintLabel(printData.value, 'curtain-tag-canvas', instance?.proxy, canvasHeight.value)
+  drawn.value = true
 }
 
 async function loadCurtainDetail() {
-  if (!orderId.value)
+  if (!pageOrderId.value)
     return
   try {
-    const order = await getSalesOrderDetail({ id: orderId.value })
-    curtainDetail.value = order.curtains?.find(c => c.id === curtainId.value) ?? null
+    const order = await getSalesOrderDetail({ id: pageOrderId.value })
+    printData.value.curtainDetail = order.curtains?.find(c => c.id === pageCurtainId.value) ?? null
   } catch {}
-  canvasHeight.value = calculateCanvasHeight()
+  canvasHeight.value = calculateCurtainPrintCanvasHeight(printData.value)
   await nextTick()
-  setTimeout(drawLabel, 100)
+  setTimeout(() => void drawLabel(), 100)
 }
 
 async function handleSaveImage() {
@@ -221,9 +70,9 @@ async function handleSaveImage() {
           canvasId: 'curtain-tag-canvas',
           x: 0,
           y: 0,
-          width: CANVAS_W,
+          width: CURTAIN_PRINT_CANVAS_W,
           height: canvasHeight.value,
-          destWidth: CANVAS_W * 3,
+          destWidth: CURTAIN_PRINT_CANVAS_W * 3,
           destHeight: canvasHeight.value * 3,
           fileType: 'png',
           success: res => resolve(res.tempFilePath),
@@ -254,81 +103,16 @@ function handlePrint() {
 // #endif
 
 // #ifdef APP-PLUS
-const PRINT_WIDTH = 456 // 57mm @ 203 DPI
-let printerReady = false
-
-function initSunmiSdk(sdk: any): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('初始化超时（5s）')), 5000)
-    sdk.initPrinter((success: boolean, message: string) => {
-      clearTimeout(timer)
-      if (success) {
-        printerReady = true
-        resolve()
-      } else {
-        reject(new Error(message || '打印机初始化失败'))
-      }
-    })
-  })
-}
-
 async function handlePrintApp() {
   if (!drawn.value) {
     uni.showToast({ title: '图片生成中，请稍候', icon: 'none' })
     return
   }
   saving.value = true
-  const PRINT_HEIGHT = Math.round(PRINT_WIDTH * (canvasHeight.value / CANVAS_W))
   try {
-    uni.showToast({ title: `生成图片 ${PRINT_WIDTH}×${PRINT_HEIGHT}px…`, icon: 'none', duration: 1500 })
-    const tempFilePath = await new Promise<string>((resolve, reject) => {
-      uni.canvasToTempFilePath(
-        {
-          canvasId: 'curtain-tag-canvas',
-          x: 0,
-          y: 0,
-          width: CANVAS_W,
-          height: canvasHeight.value,
-          destWidth: PRINT_WIDTH,
-          destHeight: PRINT_HEIGHT,
-          fileType: 'png',
-          success: res => resolve(res.tempFilePath),
-          fail: reject,
-        },
-        instance?.proxy,
-      )
-    })
-
-    const base64 = await new Promise<string>((resolve, reject) => {
-      plus.io.resolveLocalFileSystemURL(
-        tempFilePath,
-        (entry: any) => {
-          entry.file((file: any) => {
-            const reader = new plus.io.FileReader()
-            reader.onload = (e: any) => {
-              const result: string = e.target.result
-              resolve(result.includes(',') ? result.split(',')[1] : result)
-            }
-            reader.onerror = (e: any) => reject(new Error(`文件读取失败: ${JSON.stringify(e)}`))
-            reader.readAsDataURL(file)
-          }, reject)
-        },
-        reject,
-      )
-    })
-
-    if (!printerReady) {
-      uni.showToast({ title: '初始化打印机…', icon: 'none', duration: 2000 })
-      await initSunmiSdk(PrinterSdk)
-    }
-
-    LineApi.initLine({ align: 2, width: PRINT_WIDTH, height: 0, renderColor: 0, posX: 0 })
-    LineApi.printBitmap(base64, { width: PRINT_WIDTH, height: PRINT_HEIGHT, posX: 0, posY: 0, align: 2, algorithm: 0, value: 0 })
-    LineApi.autoOut()
-
+    await printCurtainTagToDevice('curtain-tag-canvas', instance?.proxy, canvasHeight.value)
     uni.showToast({ title: '已发送至打印机 ✓', icon: 'success' })
   } catch (e: any) {
-    printerReady = false
     uni.showToast({ title: e.message || '打印失败，请重试', icon: 'none', duration: 3000 })
   } finally {
     saving.value = false
@@ -340,15 +124,20 @@ onMounted(() => {
   const pages = getCurrentPages()
   const cur = pages[pages.length - 1] as any
   const opts = cur.$page?.options ?? cur.options ?? {}
-  code.value = decodeURIComponent(opts.code ?? '')
-  orderNo.value = decodeURIComponent(opts.orderNo ?? '')
-  customerName.value = decodeURIComponent(opts.customerName ?? '')
-  receiver.value = decodeURIComponent(opts.receiver ?? '')
-  orderDate.value = decodeURIComponent(opts.orderDate ?? '')
-  curtainIndex.value = Number(opts.curtainIndex ?? 0)
-  totalSets.value = Number(opts.totalSets ?? 0)
-  orderId.value = Number(opts.orderId ?? 0)
-  curtainId.value = Number(opts.curtainId ?? 0)
+  const dec = (key: string) => decodeURIComponent(opts[key] ?? '')
+  printData.value = {
+    code: dec('code'),
+    orderNo: dec('orderNo'),
+    customerName: dec('customerName'),
+    receiver: dec('receiver'),
+    orderDate: dec('orderDate'),
+    curtainIndex: Number(opts.curtainIndex ?? 0),
+    totalSets: Number(opts.totalSets ?? 0),
+    curtainDetail: null,
+    getUnitLabel: (val: string) => dictStore.getDictData('zc_product_unit', val)?.label ?? val ?? '',
+  }
+  pageOrderId.value = Number(opts.orderId ?? 0)
+  pageCurtainId.value = Number(opts.curtainId ?? 0)
   loadCurtainDetail()
 })
 </script>
@@ -364,7 +153,7 @@ onMounted(() => {
       <view class="label-shadow">
         <canvas
           canvas-id="curtain-tag-canvas"
-          :style="`width:${CANVAS_W}px;height:${canvasHeight}px;display:block;`"
+          :style="`width:${CURTAIN_PRINT_CANVAS_W}px;height:${canvasHeight}px;display:block;`"
         />
       </view>
     </view>

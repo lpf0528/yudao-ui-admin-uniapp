@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import type { SalesOrderCurtainDetail, SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import { onShow } from '@dcloudio/uni-app'
-import { ref } from 'vue'
+import { getCurrentInstance, nextTick, ref } from 'vue'
 import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
 import { createBarcodeRegistry } from '@/api/curtain/barcode-registry'
 import { cancelPackSalesOrderCurtain, cancelShipSalesOrderCurtain, completeSalesOrder, getSalesOrderDetail, packSalesOrderCurtain, shipSalesOrderCurtain, ZcOrderStatus, ZcOrderType } from '@/api/curtain/order'
 import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
+import {
+  calculateCurtainPrintCanvasHeight,
+  CURTAIN_PRINT_CANVAS_W,
+  printCurtainTag,
+} from '@/utils/print-curtain-tag'
+import { printDeliverySlip } from '@/utils/print-delivery-slip'
 
 const props = defineProps<{ id: string }>()
 
@@ -24,6 +30,8 @@ const infoExpanded = ref(false)
 const dictStore = useDictStore()
 const operatorStore = useOperatorStore()
 const message = useMessage()
+const instance = getCurrentInstance()
+const printCurtainCanvasHeight = ref(0)
 
 function requirePrimaryOperator(): boolean {
   if (operatorStore.primaryOperator)
@@ -111,6 +119,41 @@ async function promptCancelReason(title: string): Promise<string | null> {
   return reason
 }
 
+async function directPrintCurtainTag(curtain: SalesOrderCurtainDetail) {
+  if (!detail.value)
+    return
+  uni.showLoading({ title: '打包成功，正在打印…', mask: true })
+  try {
+    const code = await createBarcodeRegistry({
+      codeType: 'ORDER_QR',
+      targetRoute: '/pages-curtain/order/curtain-order-detail/curtain-item/index',
+      codeContent: { orderId: Number(props.id), curtainId: curtain.id },
+    })
+    const curtainIdx = (detail.value.curtains.findIndex(c => c.id === curtain.id) ?? 0) + 1
+    const printData = {
+      code,
+      orderNo: detail.value.orderNo ?? '',
+      customerName: detail.value.customerName ?? '',
+      receiver: detail.value.receiver ?? '',
+      orderDate: detail.value.orderDate ?? '',
+      curtainIndex: curtainIdx,
+      totalSets: detail.value.curtains.length,
+      curtainDetail: detail.value.curtains.find(c => c.id === curtain.id) ?? curtain,
+      getUnitLabel,
+    }
+    printCurtainCanvasHeight.value = calculateCurtainPrintCanvasHeight(printData)
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 150))
+    await printCurtainTag(printData, 'curtain-tag-print-canvas', instance?.proxy)
+    uni.showToast({ title: '已发送至打印机 ✓', icon: 'success' })
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '打印失败，请重试', icon: 'none', duration: 3000 })
+  } finally {
+    printCurtainCanvasHeight.value = 0
+    uni.hideLoading()
+  }
+}
+
 async function handlePack(curtain: SalesOrderCurtainDetail) {
   if (!requirePrimaryOperator())
     return
@@ -133,17 +176,8 @@ async function handlePack(curtain: SalesOrderCurtainDetail) {
       packingId.value = curtain.id
       try {
         await packSalesOrderCurtain(buildOperationReq(curtain.id))
-        uni.showToast({ title: '打包成功', icon: 'success' })
-        const code = await createBarcodeRegistry({
-          codeType: 'ORDER_QR',
-          targetRoute: '/pages-curtain/order/curtain-order-detail/curtain-item/index',
-          codeContent: { orderId: Number(props.id), curtainId: curtain.id },
-        })
-        const curtainIdx = (detail.value?.curtains.findIndex(c => c.id === curtain.id) ?? 0) + 1
-        const totalSets = detail.value?.curtains.length ?? 0
-        uni.navigateTo({
-          url: `/pages-curtain/order/curtain-order-detail/print-curtain-tag/index?code=${encodeURIComponent(code)}&orderNo=${encodeURIComponent(detail.value?.orderNo ?? '')}&customerName=${encodeURIComponent(detail.value?.customerName ?? '')}&receiver=${encodeURIComponent(detail.value?.receiver ?? '')}&orderDate=${encodeURIComponent(detail.value?.orderDate ?? '')}&curtainIndex=${curtainIdx}&totalSets=${totalSets}&orderId=${props.id}&curtainId=${curtain.id}`,
-        })
+        await loadDetail()
+        await directPrintCurtainTag(curtain)
       } catch {
         await loadDetail()
       } finally {
@@ -185,6 +219,7 @@ async function handleShip(curtain: SalesOrderCurtainDetail) {
 }
 
 const completing = ref(false)
+const printingDelivery = ref(false)
 
 async function handleComplete() {
   uni.showModal({
@@ -205,10 +240,20 @@ async function handleComplete() {
   })
 }
 
-function openPrintDelivery() {
-  uni.navigateTo({
-    url: `/pages-curtain/order/print-delivery/index?orderId=${encodeURIComponent(props.id)}`,
-  })
+async function handlePrintDelivery() {
+  if (!detail.value)
+    return
+  printingDelivery.value = true
+  uni.showLoading({ title: '正在打印…', mask: true })
+  try {
+    await printDeliverySlip(detail.value)
+    uni.showToast({ title: '已发送至打印机 ✓', icon: 'success' })
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '打印失败', icon: 'none', duration: 3000 })
+  } finally {
+    printingDelivery.value = false
+    uni.hideLoading()
+  }
 }
 
 function goInventory(mat: SalesOrderMaterialDetail, curtain: SalesOrderCurtainDetail, structure: SalesOrderStructureDetail) {
@@ -368,7 +413,7 @@ onShow(loadDetail)
 
       <!-- 窗帘明细操作区 -->
       <view class="mx-24rpx mb-0 flex items-center justify-end gap-16rpx rounded-t-12rpx bg-white px-24rpx py-16rpx">
-        <wd-button type="info" size="small" @click="openPrintDelivery">
+        <wd-button type="info" size="small" :loading="printingDelivery" @click="handlePrintDelivery">
           打印发货联
         </wd-button>
         <wd-button
@@ -502,10 +547,26 @@ onShow(loadDetail)
     </view>
 
     <wd-message-box />
+
+    <!-- 隐藏 canvas，打包成功后直接打印用 -->
+    <canvas
+      v-if="printCurtainCanvasHeight > 0"
+      canvas-id="curtain-tag-print-canvas"
+      class="hidden-print-canvas"
+      :style="`width:${CURTAIN_PRINT_CANVAS_W}px;height:${printCurtainCanvasHeight}px;`"
+    />
   </view>
 </template>
 
 <style lang="scss" scoped>
+.hidden-print-canvas {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .status-card {
   background: linear-gradient(135deg, #1890ff, #096dd9);
   padding: 32rpx 24rpx;

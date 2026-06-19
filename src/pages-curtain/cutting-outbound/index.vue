@@ -2,7 +2,7 @@
 import type { ZcProductBatch } from '@/api/curtain/product'
 import type { ZcWarehouseSimple } from '@/api/curtain/warehouse'
 import type { LoadMoreState } from '@/http/types'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, getCurrentInstance, nextTick, onMounted, reactive, ref } from 'vue'
 import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
 import { createBarcodeRegistry, getBarcodeRegistry } from '@/api/curtain/barcode-registry'
 import { createInventoryRecord } from '@/api/curtain/inventory-record'
@@ -12,9 +12,16 @@ import { getWarehouseSimpleList } from '@/api/curtain/warehouse'
 import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
 import { navigateBackPlus } from '@/utils'
+import {
+  calculateCutPrintCanvasHeight,
+  CUT_PRINT_CANVAS_W,
+  printCutLabel,
+} from '@/utils/print-cut-label'
 
 const dictStore = useDictStore()
 const operatorStore = useOperatorStore()
+const instance = getCurrentInstance()
+const printCutCanvasHeight = ref(0)
 
 function requirePrimaryOperator(): boolean {
   if (operatorStore.primaryOperator)
@@ -215,9 +222,9 @@ async function handleCutSubmit() {
       masterId: operatorStore.primaryOperator!.id,
       assistantId: operatorStore.secondaryOperator?.id,
     })
-    uni.showToast({ title: '裁剪成功', icon: 'success' })
     handleCloseCutPopup()
-    await navigateToPrintCut(cutQuantity.value)
+    await directPrintCut(cutQuantity.value)
+    setTimeout(() => navigateBackPlus(), 600)
   } catch {
     // HTTP 层已自动展示后端错误信息
   } finally {
@@ -258,33 +265,36 @@ async function handlePrintLabel(item: ZcProductBatch) {
   }
 }
 
-async function navigateToPrintCut(qty: number) {
+async function directPrintCut(qty: number) {
   if (!matInfo.value)
     return
-  uni.showLoading({ title: '生成二维码…', mask: true })
+  uni.showLoading({ title: '裁剪成功，正在打印…', mask: true })
   try {
     const codeId = await createBarcodeRegistry({
       codeType: 'ORDER_QR',
       targetRoute: '/pages-curtain/order/curtain-order-detail/curtain-item/index',
       codeContent: { orderId: matInfo.value.orderId, curtainId: matInfo.value.curtainId },
     })
-    const enc = encodeURIComponent
-    const query = [
-      `qrCode=${enc(codeId)}`,
-      `orderNo=${enc(matInfo.value.orderNo ?? '')}`,
-      `customerName=${enc(matInfo.value.customerName ?? '')}`,
-      `curtainName=${enc(matInfo.value.curtainName ?? '')}`,
-      `structureName=${enc(matInfo.value.structureName ?? '')}`,
-      `elementName=${enc(matInfo.value.elementName ?? '')}`,
-      `productName=${enc(matInfo.value.productName ?? '')}`,
-      `cutQuantity=${enc(String(qty))}`,
-      `unitLabel=${enc(getUnitLabel(matInfo.value.unitValue))}`,
-    ].join('&')
-    uni.navigateTo({ url: `/pages-curtain/cutting-outbound/print-cut/index?${query}` })
-  } catch {
-    uni.showToast({ title: '生成二维码失败', icon: 'none' })
-    navigateBackPlus()
+    const printData = {
+      qrCode: codeId,
+      orderNo: matInfo.value.orderNo ?? '',
+      customerName: matInfo.value.customerName ?? '',
+      curtainName: matInfo.value.curtainName ?? '',
+      structureName: matInfo.value.structureName ?? '',
+      elementName: matInfo.value.elementName ?? '',
+      productName: matInfo.value.productName ?? '',
+      cutQuantity: String(qty),
+      unitLabel: getUnitLabel(matInfo.value.unitValue),
+    }
+    printCutCanvasHeight.value = calculateCutPrintCanvasHeight(printData)
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 150))
+    await printCutLabel(printData, 'cut-print-canvas', instance?.proxy)
+    uni.showToast({ title: '已发送至打印机 ✓', icon: 'success' })
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '打印失败，请重试', icon: 'none', duration: 3000 })
   } finally {
+    printCutCanvasHeight.value = 0
     uni.hideLoading()
   }
 }
@@ -787,10 +797,26 @@ onMounted(() => {
         </view>
       </view>
     </wd-popup>
+
+    <!-- 隐藏 canvas，裁剪完成后直接打印用 -->
+    <canvas
+      v-if="printCutCanvasHeight > 0"
+      canvas-id="cut-print-canvas"
+      class="hidden-print-canvas"
+      :style="`width:${CUT_PRINT_CANVAS_W}px;height:${printCutCanvasHeight}px;`"
+    />
   </view>
 </template>
 
 <style lang="scss" scoped>
+.hidden-print-canvas {
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .cancel-cut-area {
   margin: 24rpx 24rpx 0;
   background-color: #fff;
