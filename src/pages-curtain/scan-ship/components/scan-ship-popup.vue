@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { MaterialTableRow, OrderSummary } from '../types'
+import type { OrderSummary, ShipDisplayMode, ShipTableRow } from '../types'
 import type { SalesOrderDetail } from '@/api/curtain/order'
 import { computed, ref, watch } from 'vue'
 import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
 import { cancelShipSalesOrderCurtain, getSalesOrderDetail, shipSalesOrderCurtain } from '@/api/curtain/order/index'
 import { useOperatorStore } from '@/store'
 import { useDictStore } from '@/store/dict'
+import { ORDER_CURTAIN_SHIP_QR } from '../types'
 import { buildShipRows } from '../utils/build-ship-rows'
 
 const props = defineProps<{
@@ -26,8 +27,12 @@ const operatorStore = useOperatorStore()
 
 const shipping = ref(false)
 const cancellingCurtainId = ref<number | null>(null)
-const materialRows = ref<MaterialTableRow[]>([])
+const tableRows = ref<ShipTableRow[]>([])
+const displayMode = ref<ShipDisplayMode>('fabric')
 const currentOrder = ref<SalesOrderDetail | null>(null)
+
+const isCurtainMode = computed(() => displayMode.value === 'curtain' || props.codeType === ORDER_CURTAIN_SHIP_QR)
+const sectionTitle = computed(() => isCurtainMode.value ? '结构信息' : '用料信息')
 
 const visible = computed({
   get: () => props.modelValue,
@@ -58,13 +63,14 @@ function getOrderStatusLabel(val: string) {
 
 async function rebuildRows(order: SalesOrderDetail) {
   await dictStore.loadDictCache()
-  const rows = buildShipRows(props.codeType, order, props.scanContent, getUnitLabel)
-  if (!rows) {
+  const result = buildShipRows(props.codeType, order, props.scanContent, getUnitLabel)
+  if (!result) {
     visible.value = false
     return
   }
   currentOrder.value = order
-  materialRows.value = rows
+  displayMode.value = result.mode
+  tableRows.value = result.rows
 }
 
 watch(
@@ -129,7 +135,7 @@ async function refreshOrderRows() {
   await rebuildRows(order)
 }
 
-async function handleCancelCurtainShip(row: MaterialTableRow) {
+async function handleCancelCurtainShip(row: ShipTableRow) {
   if (!requirePrimaryOperator() || cancellingCurtainId.value)
     return
 
@@ -156,7 +162,7 @@ async function handleConfirmShip() {
     return
 
   const toShip = [...new Map(
-    materialRows.value
+    tableRows.value
       .filter(row => row.checked && !row.shipped)
       .map(row => [row.curtainId, row]),
   ).values()]
@@ -216,10 +222,48 @@ async function handleConfirmShip() {
         </view>
       </view>
       <view class="material-section-title">
-        用料信息
+        {{ sectionTitle }}
       </view>
       <scroll-view scroll-x scroll-y class="material-popup__scroll">
-        <view class="material-table">
+        <!-- 成品窗帘：结构信息 -->
+        <view v-if="isCurtainMode" class="material-table">
+          <view class="material-table__row material-table__row--head">
+            <view class="material-table__cell material-table__cell--check" />
+            <view class="material-table__cell material-table__cell--structure">
+              结构名称
+            </view>
+            <view class="material-table__cell material-table__cell--size">
+              尺寸
+            </view>
+            <view class="material-table__cell material-table__cell--status">
+              状态
+            </view>
+          </view>
+          <view
+            v-for="row in tableRows"
+            :key="row.rowKey"
+            class="material-table__row"
+          >
+            <view class="material-table__cell material-table__cell--check">
+              <wd-checkbox v-model="row.checked" shape="square" :disabled="row.shipped" />
+            </view>
+            <view class="material-table__cell material-table__cell--structure">
+              {{ row.structureName }}
+            </view>
+            <view class="material-table__cell material-table__cell--size">
+              {{ row.sizeDisplay }}
+            </view>
+            <view
+              class="material-table__cell material-table__cell--status"
+              :class="row.shipped ? 'ship-action--cancel' : 'ship-status--pending'"
+              @click="row.shipped && handleCancelCurtainShip(row)"
+            >
+              {{ row.shipped ? '取消发货' : '未发货' }}
+            </view>
+          </view>
+        </view>
+        <!-- 面料单：用料信息 -->
+        <view v-else class="material-table">
           <view class="material-table__row material-table__row--head">
             <view class="material-table__cell material-table__cell--check" />
             <view class="material-table__cell material-table__cell--product">
@@ -233,7 +277,7 @@ async function handleConfirmShip() {
             </view>
           </view>
           <view
-            v-for="row in materialRows"
+            v-for="row in tableRows"
             :key="row.rowKey"
             class="material-table__row"
           >
@@ -383,6 +427,15 @@ async function handleConfirmShip() {
   &--product {
     flex: 1;
     min-width: 240rpx;
+  }
+
+  &--structure {
+    flex: 1;
+    min-width: 200rpx;
+  }
+
+  &--size {
+    width: 160rpx;
   }
 
   &--usage {

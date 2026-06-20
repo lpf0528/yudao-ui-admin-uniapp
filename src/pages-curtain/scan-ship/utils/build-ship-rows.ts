@@ -1,4 +1,4 @@
-import type { MaterialTableRow } from '../types'
+import type { BuildShipRowsResult, ShipTableRow } from '../types'
 import type {
   SalesOrderCurtainDetail,
   SalesOrderDetail,
@@ -9,15 +9,21 @@ import { ORDER_CURTAIN_SHIP_QR, ORDER_FABRIC_SHIP_QR } from '../types'
 
 type GetUnitLabel = (val: string) => string
 
-export function findCurtain(curtains: SalesOrderCurtainDetail[], curtainId: number) {
-  return curtains.find(c => c.curtainId === curtainId || c.id === curtainId)
+/** 按窗帘行 id 匹配 */
+export function findCurtainById(curtains: SalesOrderCurtainDetail[], id: number) {
+  return curtains.find(c => c.id === id)
 }
 
 export function findStructure(curtain: SalesOrderCurtainDetail, structureId?: number): SalesOrderStructureDetail | undefined {
   if (structureId != null && Number.isFinite(structureId)) {
-    return curtain.structures?.find(s => s.id === structureId || s.structureId === structureId)
+    return curtain.structures?.find(s => s.id === structureId)
   }
   return curtain.structures?.[0]
+}
+
+/** 成品窗帘发货码：按结构行 id 匹配 */
+export function findStructureById(curtain: SalesOrderCurtainDetail, id: number) {
+  return curtain.structures?.find(s => s.id === id)
 }
 
 export function getMaterialSpec(mat: SalesOrderMaterialDetail, structure?: SalesOrderStructureDetail) {
@@ -30,21 +36,43 @@ export function getMaterialSpec(mat: SalesOrderMaterialDetail, structure?: Sales
   return '-'
 }
 
-function buildMaterialRow(
+function formatStructureSize(structure: SalesOrderStructureDetail) {
+  if (structure.width || structure.height)
+    return `${structure.width || '-'}×${structure.height || '-'}`
+  return '-'
+}
+
+function buildFabricRow(
   curtain: SalesOrderCurtainDetail,
   mat: SalesOrderMaterialDetail,
   structure: SalesOrderStructureDetail,
   getUnitLabel: GetUnitLabel,
-): MaterialTableRow {
+): ShipTableRow {
   const spec = getMaterialSpec(mat, structure)
   const shipped = !!curtain.shipTime
-  const structureKey = structure.id ?? structure.structureId ?? 0
+  const structureKey = structure.id ?? 0
   return {
     rowKey: `${curtain.id}-${structureKey}`,
     curtainId: curtain.id,
     structureId: structureKey,
     productDisplay: `${mat.productName || '-'}(${spec})`,
     usage: `${mat.quantity ?? 0}${getUnitLabel(mat.unitValue)}`,
+    shipped,
+    checked: !shipped,
+  }
+}
+
+function buildStructureRow(
+  curtain: SalesOrderCurtainDetail,
+  structure: SalesOrderStructureDetail,
+): ShipTableRow {
+  const shipped = !!curtain.shipTime
+  return {
+    rowKey: `${curtain.id}-${structure.id}`,
+    curtainId: curtain.id,
+    structureId: structure.id,
+    structureName: structure.structureName || '-',
+    sizeDisplay: formatStructureSize(structure),
     shipped,
     checked: !shipped,
   }
@@ -68,14 +96,14 @@ export function buildFabricShipRows(
   order: SalesOrderDetail,
   content: Record<string, any>,
   getUnitLabel: GetUnitLabel,
-): MaterialTableRow[] | null {
+): ShipTableRow[] | null {
   const curtains = order.curtains ?? []
   const contentCurtainId = content.curtainId != null ? Number(content.curtainId) : undefined
   const contentStructureId = content.structureId != null ? Number(content.structureId) : undefined
   const hasCurtainId = contentCurtainId != null && Number.isFinite(contentCurtainId) && contentCurtainId > 0
 
   if (hasCurtainId) {
-    const curtain = findCurtain(curtains, contentCurtainId!)
+    const curtain = findCurtainById(curtains, contentCurtainId!)
     if (!curtain) {
       uni.showToast({ title: '未找到对应窗帘', icon: 'none' })
       return null
@@ -93,7 +121,7 @@ export function buildFabricShipRows(
       return null
     }
 
-    return [buildMaterialRow(curtain, mat, structure, getUnitLabel)]
+    return [buildFabricRow(curtain, mat, structure, getUnitLabel)]
   }
 
   const rows = curtains.flatMap((curtain) => {
@@ -101,7 +129,7 @@ export function buildFabricShipRows(
     const mat = structure?.materials?.[0]
     if (!structure || !mat)
       return []
-    return [buildMaterialRow(curtain, mat, structure, getUnitLabel)]
+    return [buildFabricRow(curtain, mat, structure, getUnitLabel)]
   })
 
   if (!rows.length) {
@@ -115,15 +143,14 @@ export function buildFabricShipRows(
 export function buildCurtainShipRows(
   order: SalesOrderDetail,
   content: Record<string, any>,
-  getUnitLabel: GetUnitLabel,
-): MaterialTableRow[] | null {
+): ShipTableRow[] | null {
   const contentCurtainId = content.curtainId != null ? Number(content.curtainId) : undefined
   if (contentCurtainId == null || !Number.isFinite(contentCurtainId) || contentCurtainId <= 0) {
     uni.showToast({ title: '条码未包含有效窗帘ID(curtainId)', icon: 'none' })
     return null
   }
 
-  const curtain = findCurtain(order.curtains ?? [], contentCurtainId)
+  const curtain = findCurtainById(order.curtains ?? [], contentCurtainId)
   if (!curtain) {
     uni.showToast({ title: '未找到对应窗帘', icon: 'none' })
     return null
@@ -135,18 +162,15 @@ export function buildCurtainShipRows(
     return null
   }
 
-  const rows = structureIds.flatMap((structureId) => {
-    const structure = findStructure(curtain, structureId)
+  const rows = structureIds.flatMap((id) => {
+    const structure = findStructureById(curtain, id)
     if (!structure)
       return []
-    const mat = structure.materials?.[0]
-    if (!mat)
-      return []
-    return [buildMaterialRow(curtain, mat, structure, getUnitLabel)]
+    return [buildStructureRow(curtain, structure)]
   })
 
   if (!rows.length) {
-    uni.showToast({ title: '未找到用料信息', icon: 'none' })
+    uni.showToast({ title: '未找到结构信息', icon: 'none' })
     return null
   }
 
@@ -158,11 +182,19 @@ export function buildShipRows(
   order: SalesOrderDetail,
   content: Record<string, any>,
   getUnitLabel: GetUnitLabel,
-): MaterialTableRow[] | null {
-  if (codeType === ORDER_FABRIC_SHIP_QR)
-    return buildFabricShipRows(order, content, getUnitLabel)
-  if (codeType === ORDER_CURTAIN_SHIP_QR)
-    return buildCurtainShipRows(order, content, getUnitLabel)
+): BuildShipRowsResult | null {
+  if (codeType === ORDER_FABRIC_SHIP_QR) {
+    const rows = buildFabricShipRows(order, content, getUnitLabel)
+    if (!rows)
+      return null
+    return { mode: 'fabric', rows }
+  }
+  if (codeType === ORDER_CURTAIN_SHIP_QR) {
+    const rows = buildCurtainShipRows(order, content)
+    if (!rows)
+      return null
+    return { mode: 'curtain', rows }
+  }
   uni.showToast({ title: '暂不支持该码类型', icon: 'none' })
   return null
 }
