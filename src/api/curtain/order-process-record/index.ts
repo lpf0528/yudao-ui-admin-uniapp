@@ -20,10 +20,13 @@ export interface OrderProcessRecord {
   id: number
   orderId: number
   orderNo: string
+  room?: string
   curtainName: string
   curtainId: number
   structureId: number
+  structureName?: string
   materialId: number
+  elementName?: string
   nodeId: number
   nodeName: string
   nodeGroup: number
