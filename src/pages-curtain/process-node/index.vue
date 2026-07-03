@@ -289,22 +289,60 @@ async function commitIfReady() {
   await handleCompleteProcess()
 }
 
+function saveProcessNodeCache(nodeId: number | null) {
+  const operatorId = primaryOperator.value?.id
+  if (!operatorId)
+    return
+  operatorStore.setProcessNode(operatorId, nodeId)
+}
+
+async function restoreProcessNodeSelection(promptIfMissing = false) {
+  if (!primaryOperator.value || !processNodeList.value.length)
+    return
+
+  if (processNodeList.value.length === 1) {
+    selectedNodeId.value = processNodeList.value[0].id
+    setNode(selectedNodeId.value)
+    saveProcessNodeCache(selectedNodeId.value)
+    return
+  }
+
+  const cachedId = operatorStore.getProcessNode(primaryOperator.value.id)
+  const validCached = cachedId != null && processNodeList.value.some(n => n.id === cachedId)
+
+  if (validCached) {
+    selectedNodeId.value = cachedId!
+    setNode(cachedId!)
+    return
+  }
+
+  selectedNodeId.value = null
+  scanContext.nodeId = null
+
+  if (!promptIfMissing)
+    return
+
+  try {
+    await message.alert({
+      title: '请先选择当前工序',
+      msg: `您有 ${processNodeList.value.length} 个工序，请在上方选择您当前正在执行的工序后再扫码`,
+      confirmButtonText: '知道了',
+    })
+  } catch {
+    // 忽略
+  }
+}
+
 function selectNode(id: number) {
   selectedNodeId.value = selectedNodeId.value === id ? null : id
   scanContext.nodeId = selectedNodeId.value
   if (selectedNodeId.value)
     setNode(selectedNodeId.value)
+  saveProcessNodeCache(selectedNodeId.value)
 }
 
-watch(() => primaryOperator.value?.id, () => {
-  selectedNodeId.value = null
-  scanContext.nodeId = null
-  if (processNodeList.value.length === 1) {
-    selectedNodeId.value = processNodeList.value[0].id
-    setNode(selectedNodeId.value)
-  } else if (processNodeList.value.length > 1) {
-    uni.showToast({ title: '请选择当前工序', icon: 'none', duration: 2000 })
-  }
+watch(() => primaryOperator.value?.id, async () => {
+  await restoreProcessNodeSelection(true)
 })
 
 function selectStructure(id: number) {
@@ -595,20 +633,8 @@ onLoad(async (query) => {
     getWorkshopUserSimpleList(),
     getMyProcessNodes(),
   ])
-  // 初始化工序选择：仅一个工序时自动选中，多个时提醒用户选择
-  if (processNodeList.value.length === 1) {
-    selectedNodeId.value = processNodeList.value[0].id
-  } else if (processNodeList.value.length > 1 && primaryOperator.value) {
-    try {
-      await message.alert({
-        title: '请先选择当前工序',
-        msg: `您有 ${processNodeList.value.length} 个工序，请在上方选择您当前正在执行的工序后再扫码`,
-        confirmButtonText: '知道了',
-      })
-    } catch {
-      // 忽略
-    }
-  }
+  // 初始化工序选择：优先恢复缓存，无缓存时再提示用户选择
+  await restoreProcessNodeSelection(true)
   if (query?.orderNo) {
     orderNo.value = query.orderNo
     if (query.curtainId)

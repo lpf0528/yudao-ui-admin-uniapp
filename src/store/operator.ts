@@ -16,12 +16,37 @@ export const useOperatorStore = defineStore(
       secondaryOperator.value = user
     }
 
+    /** 主操作员 id → 上次选择的工序节点 id */
+    const processNodeByOperator = ref<Record<number, number>>({})
+
+    const setProcessNode = (operatorId: number, nodeId: number | null) => {
+      if (nodeId === null) {
+        const next = { ...processNodeByOperator.value }
+        delete next[operatorId]
+        processNodeByOperator.value = next
+      } else {
+        processNodeByOperator.value = { ...processNodeByOperator.value, [operatorId]: nodeId }
+      }
+    }
+
+    const getProcessNode = (operatorId: number) => processNodeByOperator.value[operatorId]
+
     const clear = () => {
       primaryOperator.value = null
       secondaryOperator.value = null
+      processNodeByOperator.value = {}
     }
 
-    return { primaryOperator, secondaryOperator, setPrimary, setSecondary, clear }
+    return {
+      primaryOperator,
+      secondaryOperator,
+      processNodeByOperator,
+      setPrimary,
+      setSecondary,
+      setProcessNode,
+      getProcessNode,
+      clear,
+    }
   },
   {
     persist: true,
