@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BarcodeRegistryVO } from '@/api/curtain/barcode-registry/index'
 import type { InstallProcess } from '@/api/curtain/install-process/index'
 import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import type { ProcessNodeSimple } from '@/api/curtain/process-node/index'
@@ -53,12 +54,20 @@ const scanning = ref(false)
 
 const SCAN_END_DELAY = 100
 const SCAN_MIN_LENGTH = 4
+/** 错误提示弹窗显示时长 */
+const ERROR_TIP_DURATION = 6000
+/** 同一码短时间内多通道触发（plus.key / input / timer）去重窗口 */
+const SCAN_DEDUPE_MS = 2000
 
 let scanBuffer = ''
 let scanTimer: ReturnType<typeof setTimeout> | null = null
 let scannerListenerBound = false
 let pendingScanCode = ''
-let scannerListenerTarget: 'window' | 'document' | 'plus' | null = null
+let currentScanCode = ''
+let lastScanCode = ''
+let lastScanAt = 0
+let loadingBarcodeCodeId: string | null = null
+let loadingBarcodePromise: Promise<BarcodeRegistryVO> | null = null
 
 /** Android 扫码枪 US Keyboard 模式 keyCode → 字符（APP 端 plus.key 事件无 e.key 时使用） */
 const ANDROID_KEYCODE_CHAR: Record<number, string> = {
@@ -212,6 +221,32 @@ const selectedNodeName = computed(() =>
   processNodeList.value.find(n => n.id === selectedNodeId.value)?.name ?? '',
 )
 
+let loadingInstallProcessId: number | null = null
+let loadingInstallProcessPromise: Promise<InstallProcess | null> | null = null
+
+/** 安装工艺请求去重：同一 processId 复用缓存或进行中的 Promise */
+async function fetchInstallProcess(processId: number): Promise<InstallProcess | null> {
+  if (installProcess.value?.id === processId)
+    return installProcess.value
+  if (loadingInstallProcessId === processId && loadingInstallProcessPromise)
+    return loadingInstallProcessPromise
+
+  loadingInstallProcessId = processId
+  loadingInstallProcessPromise = getInstallProcess(processId)
+    .then((process) => {
+      installProcess.value = process
+      return process
+    })
+    .catch(() => null)
+    .finally(() => {
+      if (loadingInstallProcessId === processId) {
+        loadingInstallProcessId = null
+        loadingInstallProcessPromise = null
+      }
+    })
+  return loadingInstallProcessPromise
+}
+
 watch(
   () => selectedStructure.value?.structure.installProcessId,
   async (processId) => {
@@ -219,12 +254,7 @@ watch(
     scanContext.installProcess = null
     if (!processId)
       return
-    try {
-      installProcess.value = await getInstallProcess(processId)
-      scanContext.installProcess = installProcess.value
-    } catch {
-      // 获取失败时静默处理，不影响主流程
-    }
+    scanContext.installProcess = await fetchInstallProcess(processId)
   },
   { immediate: true },
 )
@@ -257,34 +287,34 @@ function resetScanState() {
   scanContext.nodeId = null
 }
 
-function canCommit(): boolean {
+function getCommitBlockReason(): string | null {
   if (!scanContext.orderDetail || !scanContext.structureId || !scanContext.nodeId)
-    return false
+    return '扫码信息不完整，请重新扫码'
   if (!scanContext.installProcess)
-    return true
+    return null
   const ids = parseNodeIds(scanContext.installProcess.nodeIds)
-  return ids.includes(scanContext.nodeId)
+  if (!ids.includes(scanContext.nodeId)) {
+    const nodeName = processNodeList.value.find(n => n.id === scanContext.nodeId)?.name
+    return nodeName
+      ? `「${nodeName}」不在安装工艺「${scanContext.installProcess.name}」允许范围内`
+      : '当前工序不在安装工艺允许范围内'
+  }
+  return null
 }
 
 async function ensureInstallProcessLoaded() {
   const processId = selectedStructure.value?.structure.installProcessId
-  scanContext.installProcess = null
-  installProcess.value = null
-  if (!processId)
+  if (!processId) {
+    scanContext.installProcess = null
     return
-  try {
-    const process = await getInstallProcess(processId)
-    installProcess.value = process
-    scanContext.installProcess = process
-  } catch {
-    // 安装工艺加载失败时，按不可提交处理
   }
+  scanContext.installProcess = await fetchInstallProcess(processId)
 }
 
 function showWrongNodeError(msg: string) {
   errorTipMsg.value = msg
   showWrongNodeTip.value = true
-  setTimeout(() => { showWrongNodeTip.value = false }, 3000)
+  setTimeout(() => { showWrongNodeTip.value = false }, ERROR_TIP_DURATION)
 }
 
 async function commitIfReady() {
@@ -294,8 +324,9 @@ async function commitIfReady() {
     showWrongNodeError('安装工艺加载失败，请重试扫码')
     return
   }
-  if (!canCommit()) {
-    showWrongNodeError('当前工序不允许执行')
+  const commitBlockReason = getCommitBlockReason()
+  if (commitBlockReason) {
+    showWrongNodeError(commitBlockReason)
     return
   }
   await handleCompleteProcess()
@@ -388,9 +419,7 @@ async function handleCompleteProcess() {
     showCompletedTip.value = true
     setTimeout(() => { showCompletedTip.value = false }, 3000)
   } catch (e: any) {
-    errorTipMsg.value = e?.msg ?? e?.message ?? '提交失败，请重试'
-    showWrongNodeTip.value = true
-    setTimeout(() => { showWrongNodeTip.value = false }, 3000)
+    showWrongNodeError(e?.msg ?? e?.message ?? '提交失败，请重试')
   } finally {
     submitting.value = false
   }
@@ -428,10 +457,18 @@ async function handleInputConfirm() {
   // APP 端扫码枪常把内容注入到 input，需按条码 ID 解析而非订单号查询
   if (isBarcodeCodeId(val)) {
     orderNo.value = ''
+    resetScanBuffer()
     await handleScanCode(val)
     return
   }
   await handleOrderSearch()
+}
+
+function shouldIgnoreDuplicateScan(code: string): boolean {
+  const now = Date.now()
+  if (code === currentScanCode)
+    return true
+  return code === lastScanCode && now - lastScanAt < SCAN_DEDUPE_MS
 }
 
 function normalizeKey(e: any): string {
@@ -464,22 +501,35 @@ async function handleScanCode(code: string) {
   if (!normalized)
     return
 
+  if (shouldIgnoreDuplicateScan(normalized)) {
+    console.warn('[scanner] 忽略重复扫码:', normalized)
+    return
+  }
+
   if (scanning.value) {
+    if (normalized === currentScanCode || normalized === pendingScanCode) {
+      console.warn('[scanner] 忽略排队中的重复扫码:', normalized)
+      return
+    }
     pendingScanCode = normalized
     console.warn('[scanner] 当前请求进行中，已排队等待下一次处理:', normalized)
     return
   }
 
   console.log('[scanner] 收到扫码内容:', normalized)
+  currentScanCode = normalized
   scanning.value = true
   try {
     await processBarcodeData(normalized)
+    lastScanCode = normalized
+    lastScanAt = Date.now()
     console.log('[scanner] 扫码处理完成:', normalized)
   } catch (error) {
     console.error('[scanner] 扫码处理失败:', normalized, error)
     throw error
   } finally {
     scanning.value = false
+    currentScanCode = ''
     if (pendingScanCode) {
       const nextCode = pendingScanCode
       pendingScanCode = ''
@@ -492,8 +542,11 @@ async function handleScanCode(code: string) {
 function flushScanBuffer() {
   const current = scanBuffer.trim()
   resetScanBuffer()
-  if (current.length >= SCAN_MIN_LENGTH)
+  if (current.length >= SCAN_MIN_LENGTH) {
+    if (isBarcodeCodeId(current))
+      orderNo.value = ''
     void handleScanCode(current)
+  }
 }
 
 function appendScanChar(key: string, e?: any) {
@@ -538,49 +591,62 @@ function handlePlusKeyup(e: any) {
 }
 
 function bindScannerListener() {
-  if (scannerListenerBound)
-    return
-  // 只绑定一个目标，避免同一事件双通道重复采集
+  // 先强制解绑，防止 onHide 未完全移除导致切回页面后监听器叠加
+  unbindScannerListener()
   // #ifdef H5
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', handleGlobalKeydown, true)
-    scannerListenerTarget = 'window'
+    scannerListenerBound = true
   } else if (typeof document !== 'undefined') {
     document.addEventListener('keydown', handleGlobalKeydown, true)
-    scannerListenerTarget = 'document'
+    scannerListenerBound = true
   }
   // #endif
   // #ifdef APP-PLUS
   if (typeof plus !== 'undefined' && plus.key) {
     plus.key.addEventListener('keyup', handlePlusKeyup)
-    scannerListenerTarget = 'plus'
+    scannerListenerBound = true
   }
   // #endif
-  scannerListenerBound = true
 }
 
 function unbindScannerListener() {
-  if (!scannerListenerBound)
-    return
-
-  if (scannerListenerTarget === 'window' && typeof window !== 'undefined')
+  // 无论 bound 标记如何，都尝试从所有可能目标移除，避免监听器泄漏
+  // #ifdef H5
+  if (typeof window !== 'undefined')
     window.removeEventListener('keydown', handleGlobalKeydown, true)
-  else if (scannerListenerTarget === 'document' && typeof document !== 'undefined')
+  if (typeof document !== 'undefined')
     document.removeEventListener('keydown', handleGlobalKeydown, true)
+  // #endif
   // #ifdef APP-PLUS
-  else if (scannerListenerTarget === 'plus' && typeof plus !== 'undefined' && plus.key)
+  if (typeof plus !== 'undefined' && plus.key)
     plus.key.removeEventListener('keyup', handlePlusKeyup)
   // #endif
 
   scannerListenerBound = false
-  scannerListenerTarget = null
   pendingScanCode = ''
+  currentScanCode = ''
   resetScanBuffer()
+}
+
+/** 条码注册请求去重：同一 codeId 复用进行中的 Promise */
+function fetchBarcodeRegistry(codeId: string): Promise<BarcodeRegistryVO> {
+  if (loadingBarcodeCodeId === codeId && loadingBarcodePromise)
+    return loadingBarcodePromise
+
+  loadingBarcodeCodeId = codeId
+  loadingBarcodePromise = getBarcodeRegistry(codeId).finally(() => {
+    if (loadingBarcodeCodeId === codeId) {
+      loadingBarcodeCodeId = null
+      loadingBarcodePromise = null
+    }
+  })
+  return loadingBarcodePromise
 }
 
 async function processBarcodeData(codeId: string) {
   try {
-    const data = await getBarcodeRegistry(codeId)
+    const data = await fetchBarcodeRegistry(codeId)
     console.log('[scanner] 条码注册信息:', data)
     const content = JSON.parse(data.codeContent ?? '{}') as Record<string, any>
     console.log('[scanner] 解析后的条码内容:', content)
@@ -640,7 +706,6 @@ async function processBarcodeData(codeId: string) {
 }
 
 onLoad(async (query) => {
-  bindScannerListener()
   ;[userList.value, processNodeList.value] = await Promise.all([
     getWorkshopUserSimpleList(),
     getMyProcessNodes(),
@@ -674,6 +739,9 @@ onShow(() => {
 
 onHide(() => {
   unbindScannerListener()
+  // #ifdef APP-PLUS
+  uni.hideKeyboard()
+  // #endif
 })
 
 onUnload(() => {
@@ -1644,8 +1712,8 @@ $font-scale: 1.5;
 .structure-detail-body {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  padding: 16rpx;
-  gap: 12rpx;
+  padding: 12rpx;
+  gap: 10rpx;
 }
 
 .structure-detail-item {
@@ -1654,7 +1722,7 @@ $font-scale: 1.5;
   align-items: center;
   justify-content: center;
   min-width: 0;
-  padding: 16rpx 12rpx;
+  padding: 12rpx 10rpx;
   border: 2rpx solid #e0e0e0;
   border-radius: 8rpx;
   box-sizing: border-box;
@@ -1666,18 +1734,18 @@ $font-scale: 1.5;
 }
 
 .structure-detail-label {
-  font-size: fs(50);
+  font-size: fs(38);
   color: #1890ff;
-  margin-bottom: 16rpx;
+  margin-bottom: 8rpx;
   font-weight: 500;
   text-align: center;
   width: 100%;
 }
 
 .structure-detail-value {
-  font-size: fs(42);
+  font-size: fs(40);
   color: #333;
-  font-weight: 700;
+  font-weight: 600;
   word-break: break-all;
   text-align: center;
   width: 100%;
