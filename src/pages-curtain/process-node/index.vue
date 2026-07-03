@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { InstallProcess } from '@/api/curtain/install-process/index'
-import type { SalesOrderDetail } from '@/api/curtain/order'
+import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
 import type { ProcessNodeSimple } from '@/api/curtain/process-node/index'
 import type { WorkshopUserSimple } from '@/api/curtain/workshop-user/index'
 import { storeToRefs } from 'pinia'
@@ -24,6 +24,14 @@ const dictStore = useDictStore()
 
 function translateDict(dictType: string, value: any) {
   return dictStore.getDictData(dictType, value)?.label ?? value
+}
+
+function getUnitLabel(val: string) {
+  return dictStore.getDictData('zc_product_unit', val)?.label ?? val ?? '-'
+}
+
+function getPrintableMaterials(materials?: SalesOrderMaterialDetail[]) {
+  return materials?.filter(m => m.elementIsPrint === true) ?? []
 }
 const { primaryOperator, secondaryOperator } = storeToRefs(operatorStore)
 
@@ -167,6 +175,10 @@ const selectedStructure = computed(() => {
   }
   return null
 })
+
+const selectedPrintableMaterials = computed(() =>
+  getPrintableMaterials(selectedStructure.value?.structure.materials),
+)
 
 // 解析安装工艺的 nodeIds（后端可能返回 JSON 字符串或数组）
 function parseNodeIds(raw: number[] | string): number[] {
@@ -692,135 +704,238 @@ function selectUser(user: WorkshopUserSimple) {
     operatorStore.setSecondary(user)
   showPicker.value = false
 }
+
+function previewCurtainImage(url: string) {
+  const curtain = activeCurtain.value
+  if (!curtain)
+    return
+  const urls = [curtain.image1, curtain.image2].filter(Boolean)
+  uni.previewImage({ urls, current: url })
+}
 </script>
 
 <template>
   <view class="page-body">
-    <!-- 左上角操作员 -->
-    <view class="operator-panel">
-      <view class="operator-item primary" @tap="openPicker('primary')">
-        <view class="operator-avatar primary">
-          <view class="i-carbon-user-avatar-filled text-64rpx text-[#018d71]" />
-        </view>
-        <view class="operator-info">
-          <text class="operator-role">主操作员</text>
-          <view class="operator-name-row">
-            <text class="operator-name primary">{{ primaryOperator ? primaryOperator.name : '请选择' }}</text>
-            <view class="i-carbon-chevron-down text-28rpx text-[#018d71]" />
+    <view class="page-split">
+      <!-- 左侧 2/3 -->
+      <view class="page-left">
+        <!-- 操作员（置顶） -->
+        <view class="operator-panel">
+          <view class="operator-item primary" @tap="openPicker('primary')">
+            <view class="operator-avatar primary">
+              <view class="i-carbon-user-avatar-filled text-84rpx text-[#018d71]" />
+            </view>
+            <view class="operator-info">
+              <text class="operator-role">主操作员</text>
+              <view class="operator-name-row">
+                <text class="operator-name primary">{{ primaryOperator ? primaryOperator.name : '请选择' }}</text>
+                <view class="i-carbon-chevron-down text-42rpx text-[#018d71]" />
+              </view>
+            </view>
+          </view>
+          <view class="operator-item secondary" @tap="openPicker('secondary')">
+            <view class="operator-avatar secondary">
+              <view class="i-carbon-user-avatar-filled text-60rpx text-[#666]" />
+            </view>
+            <view class="operator-info">
+              <text class="operator-role secondary">副操作员</text>
+              <view class="operator-name-row">
+                <text class="operator-name secondary">{{ secondaryOperator ? secondaryOperator.name : '请选择' }}</text>
+                <view class="i-carbon-chevron-down text-30rpx text-#999" />
+                <view
+                  v-if="secondaryOperator"
+                  class="i-carbon-close-filled text-36rpx text-#ccc"
+                  @tap.stop="operatorStore.setSecondary(null)"
+                />
+              </view>
+            </view>
+          </view>
+          <view class="operator-spacer" />
+          <view
+            class="record-entry"
+            @tap="primaryOperator && uni.navigateTo({ url: `/pages-curtain/process-node/operation-records/index?masterId=${primaryOperator.id}&masterName=${primaryOperator.name}` })"
+          >
+            <view class="i-carbon-list-boxes text-60rpx" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'" />
+            <text class="record-entry-label" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'">操作记录</text>
           </view>
         </view>
-      </view>
-      <view class="operator-item secondary" @tap="openPicker('secondary')">
-        <view class="operator-avatar secondary">
-          <view class="i-carbon-user-avatar-filled text-42rpx text-[#666]" />
-        </view>
-        <view class="operator-info">
-          <text class="operator-role secondary">副操作员</text>
-          <view class="operator-name-row">
-            <text class="operator-name secondary">{{ secondaryOperator ? secondaryOperator.name : '请选择' }}</text>
-            <view class="i-carbon-chevron-down text-20rpx text-#999" />
+
+        <!-- 订单号输入 -->
+        <view class="order-input-wrap">
+          <view class="order-input-box">
+            <view class="i-carbon-document text-48rpx text-#aaa" />
+            <input
+              v-model="orderNo"
+              class="order-input"
+              placeholder="扫码或输入订单号"
+              placeholder-style="color:#bbb"
+              confirm-type="search"
+              @confirm="handleInputConfirm"
+            >
             <view
-              v-if="secondaryOperator"
-              class="i-carbon-close-filled text-24rpx text-#ccc"
-              @tap.stop="operatorStore.setSecondary(null)"
+              class="i-carbon-close-filled text-48rpx text-#ccc"
+              @tap="orderNo = ''; orderDetail = null"
             />
           </view>
         </view>
-      </view>
-      <view class="operator-spacer" />
-      <view
-        class="record-entry"
-        @tap="primaryOperator && uni.navigateTo({ url: `/pages-curtain/process-node/operation-records/index?masterId=${primaryOperator.id}&masterName=${primaryOperator.name}` })"
-      >
-        <view class="i-carbon-list-boxes text-44rpx" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'" />
-        <text class="record-entry-label" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'">操作记录</text>
-      </view>
-    </view>
 
-    <!-- 工序节点选择 -->
-    <view v-if="primaryOperator" class="process-node-wrap">
-      <text class="process-node-label">当前工序</text>
-      <view v-if="processNodeList.length" class="process-node-list">
-        <view
-          v-for="node in processNodeList"
-          :key="node.id"
-          class="process-node-chip"
-          :class="{ 'process-node-chip--active': selectedNodeId === node.id }"
-          @tap="selectNode(node.id)"
-        >
-          <view v-if="selectedNodeId === node.id" class="i-carbon-checkmark mr-8rpx text-22rpx" />
-          <text>{{ node.name }}</text>
-        </view>
-      </view>
-      <text v-else class="process-node-empty">该操作员暂无工序配置</text>
-    </view>
-
-    <!-- 订单号输入框 -->
-    <view class="order-input-wrap">
-      <view class="order-input-box">
-        <view class="i-carbon-document text-32rpx text-#aaa" />
-        <input
-          v-model="orderNo"
-          class="order-input"
-          placeholder="扫码或输入订单号"
-          placeholder-style="color:#bbb"
-          confirm-type="search"
-          @confirm="handleInputConfirm"
-        >
-        <view
-          class="i-carbon-close-filled text-32rpx text-#ccc"
-          @tap="orderNo = ''; orderDetail = null"
-        />
-      </view>
-    </view>
-
-    <!-- 搜索中 -->
-    <view v-if="searching" class="empty-tip">
-      <wd-loading color="#018d71" />
-      <text class="mt-16rpx text-28rpx text-#999">查询中...</text>
-    </view>
-
-    <!-- 无结果 -->
-    <view v-else-if="!orderDetail" class="empty-tip">
-      <view class="i-carbon-document text-80rpx text-#ccc" />
-      <text class="mt-16rpx text-28rpx text-#999">输入订单号后按回车查询</text>
-    </view>
-
-    <!-- 面料单提示 -->
-    <view v-else-if="isFabricOnly" class="content-wrap">
-      <view class="fabric-warning">
-        <view class="i-carbon-warning text-48rpx text-[#fa8c16]" />
-        <text class="fabric-warning-text">该订单为面料单，不需要进行工序操作</text>
-      </view>
-    </view>
-
-    <!-- 订单详情 -->
-    <view v-else class="content-wrap">
-      <!-- 订单基本信息 -->
-      <view class="order-card">
-        <view class="order-card-body">
-          <!-- 左：基本信息 -->
-          <view class="order-card-left">
-            <!-- <view class="order-card-row">
-              <text class="order-card-label">订单号</text>
-              <text class="order-card-value order-card-value--no font-600">{{ orderDetail.orderNo }}</text>
-            </view> -->
-            <view class="order-card-row">
-              <text class="order-card-label">客户</text>
-              <text class="order-card-value">{{ orderDetail.customerName }}</text>
+        <scroll-view scroll-y class="page-left-scroll">
+          <view class="page-left-inner">
+            <!-- 搜索中 -->
+            <view v-if="searching" class="empty-tip">
+              <wd-loading color="#018d71" />
+              <text class="mt-16rpx text-42rpx text-#999">查询中...</text>
             </view>
-            <view class="order-card-row">
-              <text class="order-card-label">交付日期</text>
-              <text class="order-card-value">{{ orderDetail.deliveryDate || '-' }}</text>
+
+            <!-- 无结果 -->
+            <view v-else-if="!orderDetail" class="empty-tip">
+              <view class="i-carbon-document text-120rpx text-#ccc" />
+              <text class="mt-16rpx text-42rpx text-#999">输入订单号后按回车查询</text>
             </view>
-            <view v-if="orderDetail.isExpedited" class="expedited-tag">
-              加急
+
+            <!-- 面料单提示 -->
+            <view v-else-if="isFabricOnly" class="fabric-warning">
+              <view class="i-carbon-warning text-72rpx text-[#fa8c16]" />
+              <text class="fabric-warning-text">该订单为面料单，不需要进行工序操作</text>
             </view>
+
+            <!-- 订单详情 -->
+            <template v-else>
+              <!-- 窗帘行列表（Tab） -->
+              <view class="curtain-tabs-card">
+                <scroll-view scroll-x class="curtain-tabs-scroll">
+                  <view class="curtain-tabs">
+                    <view
+                      v-for="curtain in orderDetail.curtains"
+                      :key="curtain.id"
+                      class="curtain-tab"
+                      :class="{ 'curtain-tab--active': curtain.id === activeCurtainId }"
+                      @tap="activeCurtainId = curtain.id"
+                    >
+                      <text class="curtain-tab-index">第{{ curtain.index }}帘</text>
+                      <text v-if="curtain.curtainName" class="curtain-tab-room">{{ curtain.curtainName }}</text>
+                    </view>
+                  </view>
+                </scroll-view>
+                <view v-if="activeCurtain" class="curtain-tab-content">
+                  <view
+                    v-for="(structure, structureIndex) in activeCurtain.structures"
+                    :key="structure.id"
+                    class="structure-block"
+                    :class="{
+                      'structure-block--active': structure.id === selectedStructureId,
+                      'structure-block--selectable': !locateStructureId,
+                    }"
+                    @tap="selectStructure(structure.id)"
+                  >
+                    <text class="structure-index-label">#{{ structureIndex + 1 }}</text>
+                    <text class="structure-name-label">{{ structure.structureName }}</text>
+                  </view>
+                </view>
+              </view>
+
+              <!-- 款式信息 -->
+              <view v-if="selectedStructure" class="structure-detail-card">
+                <view class="structure-detail-header">
+                  <text class="structure-detail-title">款式信息</text>
+                  <text class="structure-detail-subtitle">{{ selectedStructure.curtain.curtainName }} · {{ selectedStructure.structure.structureName }}</text>
+                </view>
+                <view class="structure-detail-body">
+                  <view v-if="selectedStructure.curtain.room" class="structure-detail-item">
+                    <text class="structure-detail-label">房间</text>
+                    <text class="structure-detail-value">{{ selectedStructure.curtain.room }}</text>
+                  </view>
+                  <view v-if="selectedStructure.curtain.pleatRatioValue != null && selectedStructure.curtain.pleatRatioValue !== ''" class="structure-detail-item">
+                    <text class="structure-detail-label">褶倍</text>
+                    <text class="structure-detail-value">{{ selectedStructure.curtain.pleatRatioValue }}</text>
+                  </view>
+                  <view class="structure-detail-item">
+                    <text class="structure-detail-label">宽*高</text>
+                    <text class="structure-detail-value">{{ selectedStructure.structure.width }}*{{ selectedStructure.structure.height }}</text>
+                  </view>
+                  <view v-if="selectedStructure.structure.installProcessName" class="structure-detail-item">
+                    <text class="structure-detail-label">安装工艺</text>
+                    <text class="structure-detail-value">{{ selectedStructure.structure.installProcessName }}</text>
+                  </view>
+                  <view v-if="selectedStructure.structure.openMethod" class="structure-detail-item">
+                    <text class="structure-detail-label">开合方式</text>
+                    <text class="structure-detail-value">{{ translateDict('zc_open_method', selectedStructure.structure.openMethod) }}</text>
+                  </view>
+                  <view v-if="selectedStructure.structure.processType" class="structure-detail-item">
+                    <text class="structure-detail-label">加工类型</text>
+                    <text class="structure-detail-value">{{ translateDict('zc_process_type', selectedStructure.structure.processType) }}</text>
+                  </view>
+                  <view class="structure-detail-item">
+                    <text class="structure-detail-label">定型</text>
+                    <text class="structure-detail-value">{{ selectedStructure.structure.isShaping ? '是' : '否' }}</text>
+                  </view>
+                  <view v-if="selectedStructure.structure.pleatsNum" class="structure-detail-item">
+                    <text class="structure-detail-label">褶数</text>
+                    <text class="structure-detail-value">{{ selectedStructure.structure.pleatsNum }}</text>
+                  </view>
+                  <view v-if="selectedStructure.structure.pleatsDistance" class="structure-detail-item">
+                    <text class="structure-detail-label">褶距</text>
+                    <text class="structure-detail-value">{{ selectedStructure.structure.pleatsDistance }}</text>
+                  </view>
+                  <view v-if="selectedStructure.structure.skirtHeight" class="structure-detail-item">
+                    <text class="structure-detail-label">裙摆高</text>
+                    <text class="structure-detail-value">{{ selectedStructure.structure.skirtHeight }}</text>
+                  </view>
+                  <view v-if="selectedStructure.structure.leftCorner" class="structure-detail-item">
+                    <text class="structure-detail-label">左弯角</text>
+                    <text class="structure-detail-value">{{ selectedStructure.structure.leftCorner }}</text>
+                  </view>
+                  <view v-if="selectedStructure.structure.rightCorner" class="structure-detail-item">
+                    <text class="structure-detail-label">右弯角</text>
+                    <text class="structure-detail-value">{{ selectedStructure.structure.rightCorner }}</text>
+                  </view>
+                  <view v-if="selectedStructure.structure.pasteDirection" class="structure-detail-item">
+                    <text class="structure-detail-label">粘贴方向</text>
+                    <text class="structure-detail-value">{{ translateDict('zc_paste_direction', selectedStructure.structure.pasteDirection) }}</text>
+                  </view>
+                </view>
+
+                <!-- 用料明细 -->
+                <view class="structure-materials-section">
+                  <text class="structure-materials-title">用料信息</text>
+                  <view v-if="selectedPrintableMaterials.length" class="material-detail-table">
+                    <view class="material-detail-header">
+                      <text class="material-detail-label">组件</text>
+                      <text class="material-detail-label">产品</text>
+                      <text class="material-detail-label">用量</text>
+                      <text class="material-detail-label">单位</text>
+                    </view>
+                    <view
+                      v-for="mat in selectedPrintableMaterials"
+                      :key="mat.id"
+                      class="material-detail-item"
+                    >
+                      <text class="material-detail-value">{{ mat.elementName || '-' }}</text>
+                      <text class="material-detail-value">{{ mat.productName || '-' }}</text>
+                      <text class="material-detail-value">{{ mat.quantity ?? '-' }}</text>
+                      <text class="material-detail-value">{{ getUnitLabel(mat.unitValue) }}</text>
+                    </view>
+                  </view>
+                  <text v-else class="structure-materials-empty">暂无用料</text>
+                </view>
+              </view>
+            </template>
           </view>
-          <!-- 交货提醒 -->
-          <view v-if="deliveryStatus" class="delivery-badge" :class="`delivery-badge--${deliveryStatus.level}`">
+        </scroll-view>
+      </view>
+
+      <!-- 右侧 1/3：交货提醒 + 工序 -->
+      <view class="page-right">
+        <!-- 交货提醒 -->
+        <view class="delivery-panel">
+          <text class="delivery-panel-title">交货提醒</text>
+          <view
+            v-if="deliveryStatus"
+            class="delivery-badge delivery-badge--panel"
+            :class="`delivery-badge--${deliveryStatus.level}`"
+          >
             <view
-              class="text-36rpx"
+              class="delivery-badge-icon"
               :class="{
                 'i-carbon-alarm': deliveryStatus.level === 'overdue',
                 'i-carbon-warning-filled': deliveryStatus.level === 'today',
@@ -829,104 +944,82 @@ function selectUser(user: WorkshopUserSimple) {
               }"
             />
             <text class="delivery-text">{{ deliveryStatus.text }}</text>
+            <text v-if="orderDetail?.deliveryDate" class="delivery-date">{{ orderDetail.deliveryDate }}</text>
+          </view>
+          <view v-else class="delivery-placeholder">
+            <view class="i-carbon-calendar text-72rpx text-#ccc" />
+            <text class="delivery-placeholder-text">查询订单后显示交货提醒</text>
           </view>
         </view>
-      </view>
 
-      <!-- 窗帘行列表（Tab） -->
-      <view class="curtain-tabs-card">
-        <scroll-view scroll-x class="curtain-tabs-scroll">
-          <view class="curtain-tabs">
+        <!-- 当前工序 -->
+        <view v-if="primaryOperator" class="delivery-panel">
+          <text class="delivery-panel-title">当前工序</text>
+          <view v-if="processNodeList.length" class="process-node-list">
             <view
-              v-for="curtain in orderDetail.curtains"
-              :key="curtain.id"
-              class="curtain-tab"
-              :class="{ 'curtain-tab--active': curtain.id === activeCurtainId }"
-              @tap="activeCurtainId = curtain.id"
+              v-for="node in processNodeList"
+              :key="node.id"
+              class="process-node-chip"
+              :class="{ 'process-node-chip--active': selectedNodeId === node.id }"
+              @tap="selectNode(node.id)"
             >
-              <text class="curtain-tab-index">第{{ curtain.index }}帘</text>
-              <text v-if="curtain.curtainName" class="curtain-tab-room">{{ curtain.curtainName }}</text>
+              <view v-if="selectedNodeId === node.id" class="i-carbon-checkmark mr-8rpx text-42rpx" />
+              <text>{{ node.name }}</text>
             </view>
           </view>
-        </scroll-view>
-        <view v-if="activeCurtain" class="curtain-tab-content">
-          <view
-            v-for="(structure, structureIndex) in activeCurtain.structures"
-            :key="structure.id"
-            class="structure-block"
-            :class="{
-              'structure-block--active': structure.id === selectedStructureId,
-              'structure-block--selectable': !locateStructureId,
-            }"
-            @tap="selectStructure(structure.id)"
-          >
-            <view class="structure-row">
-              <text class="structure-name-label">#{{ structureIndex + 1 }} {{ structure.structureName }}</text>
-              <view class="material-tags">
-                <view
-                  v-for="mat in structure.materials"
-                  :key="mat.id"
-                  class="material-tag"
-                >
-                  <text class="mat-element">{{ mat.elementName }}</text>
-                  <text class="mat-product">{{ mat.productName }}</text>
+          <text v-else class="process-node-empty">该操作员暂无工序配置</text>
+        </view>
+
+        <!-- 窗帘图片 -->
+        <view v-if="primaryOperator && activeCurtain" class="delivery-panel">
+          <text class="delivery-panel-title">窗帘图片</text>
+          <view class="curtain-image-row">
+            <view class="curtain-image-cell">
+              <view class="curtain-image-inner">
+                <image
+                  v-if="activeCurtain.image1"
+                  :src="activeCurtain.image1"
+                  class="curtain-image-item"
+                  mode="aspectFit"
+                  @tap="previewCurtainImage(activeCurtain.image1)"
+                />
+                <view v-else class="curtain-image-slot-empty">
+                  <view class="i-carbon-image text-48rpx text-#ccc" />
+                </view>
+              </view>
+            </view>
+            <view class="curtain-image-cell">
+              <view class="curtain-image-inner">
+                <image
+                  v-if="activeCurtain.image2"
+                  :src="activeCurtain.image2"
+                  class="curtain-image-item"
+                  mode="aspectFit"
+                  @tap="previewCurtainImage(activeCurtain.image2)"
+                />
+                <view v-else class="curtain-image-slot-empty">
+                  <view class="i-carbon-image text-48rpx text-#ccc" />
                 </view>
               </view>
             </view>
           </view>
         </view>
-      </view>
 
-      <!-- 选中结构详情 -->
-      <view v-if="selectedStructure" class="structure-detail-card">
-        <view class="structure-detail-header">
-          <text class="structure-detail-title">{{ selectedStructure.curtain.curtainName }} · {{ selectedStructure.structure.structureName }}</text>
-          <text class="structure-detail-size">高×宽：{{ selectedStructure.structure.width }} × {{ selectedStructure.structure.height }}</text>
-        </view>
-        <view class="structure-detail-body">
-          <view v-if="selectedStructure.structure.installProcessName" class="structure-detail-item">
-            <text class="structure-detail-label">安装工艺</text>
-            <text class="structure-detail-value">{{ selectedStructure.structure.installProcessName }}</text>
-          </view>
-          <view v-if="selectedStructure.structure.openMethod" class="structure-detail-item">
-            <text class="structure-detail-label">开合方式</text>
-            <text class="structure-detail-value">{{ translateDict('zc_open_method', selectedStructure.structure.openMethod) }}</text>
-          </view>
-          <view v-if="selectedStructure.structure.processType" class="structure-detail-item">
-            <text class="structure-detail-label">加工类型</text>
-            <text class="structure-detail-value">{{ translateDict('zc_process_type', selectedStructure.structure.processType) }}</text>
-          </view>
-          <view class="structure-detail-item">
-            <text class="structure-detail-label">定型</text>
-            <text class="structure-detail-value">{{ selectedStructure.structure.isShaping ? '是' : '否' }}</text>
-          </view>
-          <view v-if="selectedStructure.structure.pleatsNum" class="structure-detail-item">
-            <text class="structure-detail-label">褶数</text>
-            <text class="structure-detail-value">{{ selectedStructure.structure.pleatsNum }}</text>
-          </view>
-          <view v-if="selectedStructure.structure.pleatsDistance" class="structure-detail-item">
-            <text class="structure-detail-label">褶距</text>
-            <text class="structure-detail-value">{{ selectedStructure.structure.pleatsDistance }}</text>
-          </view>
-          <view v-if="selectedStructure.structure.skirtHeight" class="structure-detail-item">
-            <text class="structure-detail-label">裙摆高</text>
-            <text class="structure-detail-value">{{ selectedStructure.structure.skirtHeight }}</text>
-          </view>
-          <view v-if="selectedStructure.structure.leftCorner" class="structure-detail-item">
-            <text class="structure-detail-label">左弯角</text>
-            <text class="structure-detail-value">{{ selectedStructure.structure.leftCorner }}</text>
-          </view>
-          <view v-if="selectedStructure.structure.rightCorner" class="structure-detail-item">
-            <text class="structure-detail-label">右弯角</text>
-            <text class="structure-detail-value">{{ selectedStructure.structure.rightCorner }}</text>
-          </view>
-          <view v-if="selectedStructure.structure.pasteDirection" class="structure-detail-item">
-            <text class="structure-detail-label">粘贴方向</text>
-            <text class="structure-detail-value">{{ translateDict('zc_paste_direction', selectedStructure.structure.pasteDirection) }}</text>
-          </view>
-          <view v-if="selectedStructure.structure.note" class="structure-detail-item structure-detail-item--full">
-            <text class="structure-detail-label">备注</text>
-            <text class="structure-detail-value">{{ selectedStructure.structure.note }}</text>
+        <!-- 备注信息 -->
+        <view
+          v-if="primaryOperator && activeCurtain && (activeCurtain.note || selectedStructure?.structure.note)"
+          class="delivery-panel"
+        >
+          <text class="delivery-panel-title">备注信息</text>
+          <view class="curtain-notes-body">
+            <view v-if="activeCurtain.note" class="curtain-note-item">
+              <text class="curtain-note-label">窗帘备注</text>
+              <text class="curtain-note-value">{{ activeCurtain.note }}</text>
+            </view>
+            <view v-if="selectedStructure?.structure.note" class="curtain-note-item">
+              <text class="curtain-note-label">结构备注</text>
+              <text class="curtain-note-value">{{ selectedStructure.structure.note }}</text>
+            </view>
           </view>
         </view>
       </view>
@@ -938,7 +1031,7 @@ function selectUser(user: WorkshopUserSimple) {
   <!-- 已完成工序居中提示 -->
   <view v-if="showCompletedTip" class="completed-tip-overlay">
     <view class="completed-tip-box">
-      <view class="i-carbon-checkmark-filled text-72rpx text-white" />
+      <view class="i-carbon-checkmark-filled text-108rpx text-white" />
       <text class="completed-tip-text">已完成【{{ selectedNodeName }}】</text>
     </view>
   </view>
@@ -946,7 +1039,7 @@ function selectUser(user: WorkshopUserSimple) {
   <!-- 错误居中提示（错误工序 / 提交失败） -->
   <view v-if="showWrongNodeTip" class="completed-tip-overlay">
     <view class="wrong-node-tip-box">
-      <view class="i-carbon-warning-filled text-72rpx text-white" />
+      <view class="i-carbon-warning-filled text-108rpx text-white" />
       <text class="completed-tip-text">{{ errorTipMsg || '当前窗帘不需要执行该工序' }}</text>
     </view>
   </view>
@@ -955,8 +1048,8 @@ function selectUser(user: WorkshopUserSimple) {
   <wd-popup v-model="showPicker" position="center">
     <view class="picker-wrap">
       <view class="picker-header">
-        <text class="text-30rpx text-#333 font-500">切换{{ pickerTarget === 'primary' ? '主' : '副' }}操作员</text>
-        <view class="i-carbon-close text-36rpx text-#999" @tap="showPicker = false" />
+        <text class="text-45rpx text-#333 font-500">切换{{ pickerTarget === 'primary' ? '主' : '副' }}操作员</text>
+        <view class="i-carbon-close text-54rpx text-#999" @tap="showPicker = false" />
       </view>
       <scroll-view scroll-y style="max-height: 50vh">
         <view
@@ -970,8 +1063,8 @@ function selectUser(user: WorkshopUserSimple) {
           @tap="selectUser(user)"
         >
           <text>{{ user.name }}</text>
-          <view v-if="user.id === currentSelectedId" class="i-carbon-checkmark text-32rpx text-[#018d71]" />
-          <text v-else-if="user.id === disabledId" class="text-24rpx text-#ccc">已选为{{ pickerTarget === 'primary' ? '副' : '主' }}操作员</text>
+          <view v-if="user.id === currentSelectedId" class="i-carbon-checkmark text-48rpx text-[#018d71]" />
+          <text v-else-if="user.id === disabledId" class="text-36rpx text-#ccc">已选为{{ pickerTarget === 'primary' ? '副' : '主' }}操作员</text>
         </view>
       </scroll-view>
     </view>
@@ -979,16 +1072,101 @@ function selectUser(user: WorkshopUserSimple) {
 </template>
 
 <style lang="scss" scoped>
+$font-scale: 1.5;
+
+@function fs($size) {
+  @return $size * $font-scale * 1rpx;
+}
+
 .page-body {
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
   background-color: #f5f5f5;
+}
+
+.page-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 20rpx;
+  padding: 20rpx 24rpx 24rpx;
+  overflow: hidden;
+}
+
+.page-left {
+  flex: 2;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  min-height: 0;
+}
+
+.page-left-scroll {
+  flex: 1;
+  min-height: 0;
+  height: 0;
+}
+
+.page-left-inner {
+  padding: 0 0 24rpx;
+}
+
+.page-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 4rpx 0 24rpx;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.delivery-panel {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+.delivery-panel-title {
+  display: block;
+  font-size: fs(32);
+  color: #333;
+  margin-bottom: 16rpx;
+  font-weight: 600;
+}
+
+.delivery-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 32rpx 16rpx;
+  background-color: #fafafa;
+  border-radius: 12rpx;
+  border: 2rpx dashed #e8e8e8;
+}
+
+.delivery-placeholder-text {
+  font-size: fs(24);
+  color: #bbb;
+  text-align: center;
 }
 
 .operator-panel {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  margin: 24rpx 24rpx 0;
-  padding: 28rpx 32rpx;
+  flex-shrink: 0;
+  padding: 24rpx 28rpx;
   background-color: #fff;
   border-radius: 16rpx;
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
@@ -1008,7 +1186,7 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .record-entry-label {
-  font-size: 22rpx;
+  font-size: fs(22);
 }
 
 .operator-item {
@@ -1051,12 +1229,12 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .operator-role {
-  font-size: 22rpx;
+  font-size: fs(22);
   color: #333;
   margin-bottom: 6rpx;
 
   &.secondary {
-    font-size: 20rpx;
+    font-size: fs(20);
     margin-bottom: 4rpx;
   }
 }
@@ -1074,32 +1252,16 @@ function selectUser(user: WorkshopUserSimple) {
   text-overflow: ellipsis;
 
   &.primary {
-    font-size: 42rpx;
+    font-size: fs(36);
     color: #018d71;
-    max-width: 200rpx;
+    max-width: 100%;
   }
 
   &.secondary {
-    font-size: 28rpx;
+    font-size: fs(28);
     color: #555;
-    max-width: 140rpx;
+    max-width: 100%;
   }
-}
-
-.process-node-wrap {
-  margin: 16rpx 24rpx 0;
-  padding: 20rpx 28rpx;
-  background-color: #fff;
-  border-radius: 16rpx;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-}
-
-.process-node-label {
-  font-size: 26rpx;
-  color: #333;
 }
 
 .process-node-list {
@@ -1111,13 +1273,17 @@ function selectUser(user: WorkshopUserSimple) {
 .process-node-chip {
   display: flex;
   align-items: center;
-  padding: 12rpx 24rpx;
+  justify-content: center;
+  padding: 18rpx 20rpx;
   border-radius: 10rpx;
   border: 2rpx solid #ccc;
   background-color: #e0e0e0;
-  font-size: 28rpx;
+  font-size: fs(36);
   color: #666;
   font-weight: 500;
+  flex: 1;
+  min-width: calc(50% - 6rpx);
+  box-sizing: border-box;
 
   &--active {
     background-color: #018d71;
@@ -1129,12 +1295,78 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .process-node-empty {
-  font-size: 26rpx;
+  font-size: fs(30);
   color: #ccc;
 }
 
+.curtain-image-row {
+  display: flex;
+  gap: 12rpx;
+}
+
+.curtain-image-cell {
+  flex: 1;
+  width: 0;
+  box-sizing: border-box;
+}
+
+.curtain-image-inner {
+  position: relative;
+  width: 100%;
+  padding-bottom: 100%;
+  border-radius: 12rpx;
+  border: 1rpx solid #e8e8e8;
+  background-color: #fafafa;
+  overflow: hidden;
+}
+
+.curtain-image-item,
+.curtain-image-slot-empty {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.curtain-image-slot-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fafafa;
+}
+
+.curtain-notes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.curtain-note-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 12rpx 16rpx;
+  background-color: #fafafa;
+  border-radius: 10rpx;
+  border: 1rpx solid #e8e8e8;
+}
+
+.curtain-note-label {
+  font-size: fs(32);
+  color: #333;
+  font-weight: 600;
+}
+
+.curtain-note-value {
+  font-size: fs(32);
+  color: #333;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
 .order-input-wrap {
-  margin: 20rpx 24rpx 0;
+  flex-shrink: 0;
 }
 
 .order-input-box {
@@ -1150,7 +1382,7 @@ function selectUser(user: WorkshopUserSimple) {
 
 .order-input {
   flex: 1;
-  font-size: 30rpx;
+  font-size: fs(30);
   color: #333;
 }
 
@@ -1159,11 +1391,8 @@ function selectUser(user: WorkshopUserSimple) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-top: 200rpx;
-}
-
-.content-wrap {
-  padding: 24rpx;
+  padding: 120rpx 40rpx;
+  min-height: 400rpx;
 }
 
 .delivery-badge {
@@ -1175,6 +1404,11 @@ function selectUser(user: WorkshopUserSimple) {
   padding: 16rpx 20rpx;
   border-radius: 12rpx;
   flex-shrink: 0;
+
+  &--panel {
+    padding: 28rpx 20rpx;
+    gap: 12rpx;
+  }
 
   &--overdue {
     background-color: #fff1f0;
@@ -1197,11 +1431,21 @@ function selectUser(user: WorkshopUserSimple) {
   }
 }
 
+.delivery-badge-icon {
+  font-size: fs(56);
+}
+
 .delivery-text {
-  font-size: 28rpx;
+  font-size: fs(32);
   font-weight: 600;
   text-align: center;
   line-height: 1.4;
+}
+
+.delivery-date {
+  font-size: fs(24);
+  opacity: 0.75;
+  margin-top: 4rpx;
 }
 
 .fabric-warning {
@@ -1213,123 +1457,14 @@ function selectUser(user: WorkshopUserSimple) {
   background-color: #fffbe6;
   border: 1rpx solid #ffe58f;
   border-radius: 12rpx;
+  margin-bottom: 20rpx;
 }
 
 .fabric-warning-text {
   margin-top: 16rpx;
-  font-size: 28rpx;
+  font-size: fs(28);
   color: #d46b08;
   text-align: center;
-}
-
-.order-card {
-  background-color: #fff;
-  border-radius: 12rpx;
-  margin-bottom: 20rpx;
-  overflow: hidden;
-}
-
-.order-card-body {
-  display: flex;
-  align-items: stretch;
-}
-
-.order-card-left {
-  flex: 1;
-  padding: 24rpx 28rpx;
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8rpx 0;
-}
-
-.order-card-divider {
-  width: 2rpx;
-  background-color: #d9d9d9;
-  flex-shrink: 0;
-}
-
-.order-card-right {
-  flex: 1;
-  padding: 24rpx 20rpx;
-  background-color: #fafafa;
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-}
-
-.node-section-title {
-  font-size: 22rpx;
-  color: #333;
-  margin-bottom: 4rpx;
-}
-
-.node-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
-}
-
-.node-chip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 14rpx 0;
-  border-radius: 10rpx;
-  border: 2rpx solid #ccc;
-  background-color: #e0e0e0;
-  font-size: 28rpx;
-  color: #666;
-  font-weight: 500;
-
-  &--active {
-    background-color: #018d71;
-    border-color: #018d71;
-    color: #fff;
-    font-weight: 600;
-    box-shadow: 0 4rpx 12rpx rgba(1, 141, 113, 0.25);
-  }
-}
-
-.node-empty {
-  font-size: 24rpx;
-  color: #ccc;
-  text-align: center;
-}
-
-.order-card-row {
-  display: flex;
-  flex-direction: column;
-  padding: 6rpx 16rpx 6rpx 0;
-  min-width: 160rpx;
-}
-
-.order-card-label {
-  font-size: 22rpx;
-  color: #999;
-  margin-bottom: 4rpx;
-}
-
-.order-card-value {
-  font-size: 28rpx;
-  color: #333;
-  font-weight: 500;
-
-  &--no {
-    font-size: 26rpx;
-  }
-}
-
-.expedited-tag {
-  position: absolute;
-  top: 28rpx;
-  right: 32rpx;
-  padding: 4rpx 16rpx;
-  background-color: #fff1f0;
-  color: #f5222d;
-  font-size: 22rpx;
-  border-radius: 6rpx;
-  border: 1rpx solid #ffa39e;
 }
 
 .curtain-card {
@@ -1350,36 +1485,35 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .curtain-index {
-  font-size: 24rpx;
+  font-size: fs(24);
   color: #018d71;
   font-weight: 600;
 }
 
 .curtain-name {
-  font-size: 28rpx;
+  font-size: fs(28);
   color: #333;
   font-weight: 700;
   flex: 1;
 }
 
 .curtain-room {
-  font-size: 24rpx;
+  font-size: fs(24);
   color: #333;
 }
 
 .structure-block {
-  padding: 16rpx 32rpx;
-  border-bottom: 1rpx solid #f5f5f5;
-
-  &:last-child {
-    border-bottom: none;
-  }
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 8rpx 12rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #e0e0e0;
+  background-color: #f5f5f5;
 
   &--active {
-    .structure-row {
-      border-color: #018d71;
-      background-color: #b8e0d4;
-    }
+    background-color: #b8e0d4;
+    border-color: #018d71;
   }
 
   &--selectable {
@@ -1389,49 +1523,19 @@ function selectUser(user: WorkshopUserSimple) {
   }
 }
 
-.structure-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  border: 2rpx solid #e0e0e0;
-  border-radius: 8rpx;
-  padding: 12rpx 16rpx;
-}
-
-.structure-name-label {
-  font-size: 26rpx;
-  color: #333;
-  font-weight: 600;
+.structure-index-label {
+  font-size: fs(36);
+  color: #018d71;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
-.material-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
-}
-
-.material-tag {
-  display: flex;
-  align-items: center;
-  border-radius: 6rpx;
-  overflow: hidden;
-  border: 2rpx solid #bbb;
-}
-
-.mat-element {
-  font-size: 22rpx;
-  color: #fff;
-  background-color: #888;
-  padding: 4rpx 10rpx;
-}
-
-.mat-product {
-  font-size: 24rpx;
+.structure-name-label {
+  font-size: fs(36);
   color: #333;
-  background-color: #f5f5f5;
-  padding: 4rpx 12rpx;
+  font-weight: 600;
+  min-width: 0;
+  word-break: break-all;
 }
 
 .curtain-tabs-card {
@@ -1478,22 +1582,25 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .curtain-tab-index {
-  font-size: 28rpx;
+  font-size: fs(28);
   color: #333;
   font-weight: 500;
 }
 
 .curtain-tab-room {
-  font-size: 22rpx;
+  font-size: fs(22);
   color: #999;
 }
 
 .curtain-tab-content {
-  padding: 0 0 8rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx 24rpx;
+  padding: 16rpx 32rpx 8rpx;
 }
 
 .curtain-tab-name {
-  font-size: 26rpx;
+  font-size: fs(26);
   color: #666;
   padding: 16rpx 32rpx 8rpx;
   font-weight: 600;
@@ -1510,28 +1617,33 @@ function selectUser(user: WorkshopUserSimple) {
 
 .structure-detail-header {
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 20rpx;
   padding: 20rpx 28rpx;
   background-color: #e8f4f0;
   border-bottom: 1rpx solid #c8e8df;
 }
 
 .structure-detail-title {
-  font-size: 28rpx;
+  font-size: fs(28);
   font-weight: 600;
   color: #018d71;
-}
-
-.structure-detail-size {
-  font-size: 26rpx;
-  color: #333;
   flex-shrink: 0;
 }
 
+.structure-detail-subtitle {
+  font-size: fs(28);
+  color: #333;
+  font-weight: 600;
+  min-width: 0;
+  word-break: break-all;
+}
+
 .structure-detail-body {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   padding: 16rpx;
   gap: 12rpx;
 }
@@ -1539,26 +1651,106 @@ function selectUser(user: WorkshopUserSimple) {
 .structure-detail-item {
   display: flex;
   flex-direction: column;
-  padding: 10rpx 16rpx;
-  min-width: 160rpx;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 16rpx 12rpx;
   border: 2rpx solid #e0e0e0;
   border-radius: 8rpx;
+  box-sizing: border-box;
+  text-align: center;
 
   &--full {
-    width: 100%;
+    grid-column: 1 / -1;
   }
 }
 
 .structure-detail-label {
-  font-size: 22rpx;
-  color: #999;
-  margin-bottom: 4rpx;
+  font-size: fs(50);
+  color: #1890ff;
+  margin-bottom: 16rpx;
+  font-weight: 500;
+  text-align: center;
+  width: 100%;
 }
 
 .structure-detail-value {
-  font-size: 28rpx;
+  font-size: fs(42);
   color: #333;
   font-weight: 700;
+  word-break: break-all;
+  text-align: center;
+  width: 100%;
+}
+
+.structure-materials-section {
+  border-top: 1rpx solid #c8e8df;
+  padding: 20rpx 28rpx 24rpx;
+  background-color: #fff;
+}
+
+.structure-materials-title {
+  display: block;
+  font-size: fs(28);
+  font-weight: 600;
+  color: #018d71;
+  margin-bottom: 16rpx;
+  text-align: center;
+}
+
+.structure-materials-empty {
+  display: block;
+  font-size: fs(26);
+  color: #bbb;
+  text-align: center;
+  padding: 16rpx 0;
+}
+
+.material-detail-table {
+  border: 2rpx solid #d4ebe4;
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.material-detail-header,
+.material-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 14rpx 20rpx;
+}
+
+.material-detail-header {
+  background-color: #e8f4f0;
+  border-bottom: 1rpx solid #d4ebe4;
+}
+
+.material-detail-item {
+  background-color: #f5f9f7;
+
+  &:not(:last-child) {
+    border-bottom: 1rpx solid #e8f0ec;
+  }
+}
+
+.material-detail-label,
+.material-detail-value {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.material-detail-label {
+  font-size: fs(24);
+  color: #666;
+  font-weight: 600;
+}
+
+.material-detail-value {
+  font-size: fs(30);
+  color: #333;
+  font-weight: 600;
+  word-break: break-all;
 }
 
 .picker-wrap {
@@ -1612,7 +1804,7 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .completed-tip-text {
-  font-size: 44rpx;
+  font-size: fs(44);
   font-weight: 700;
   color: #fff;
   letter-spacing: 4rpx;
@@ -1628,7 +1820,7 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .node-completed-text {
-  font-size: 28rpx;
+  font-size: fs(28);
   color: #018d71;
   font-weight: 600;
 }
@@ -1638,7 +1830,7 @@ function selectUser(user: WorkshopUserSimple) {
   align-items: center;
   justify-content: space-between;
   padding: 28rpx 32rpx;
-  font-size: 30rpx;
+  font-size: fs(30);
   color: #333;
 
   &:first-child {
@@ -1678,7 +1870,7 @@ function selectUser(user: WorkshopUserSimple) {
 }
 
 .complete-btn-text {
-  font-size: 34rpx;
+  font-size: fs(34);
   font-weight: 700;
   color: #fff;
 }
