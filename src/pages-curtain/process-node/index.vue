@@ -314,6 +314,9 @@ async function ensureInstallProcessLoaded() {
 function showWrongNodeError(msg: string) {
   errorTipMsg.value = msg
   showWrongNodeTip.value = true
+  const audio = uni.createInnerAudioContext()
+  audio.src = '/static/audio/error_node.mp3'
+  audio.play()
   setTimeout(() => { showWrongNodeTip.value = false }, ERROR_TIP_DURATION)
 }
 
@@ -443,7 +446,7 @@ async function handleOrderSearch() {
     if (orderDetail.value)
       setOrder(orderDetail.value)
   } catch {
-    uni.showToast({ title: '未找到该订单', icon: 'none' })
+    showWrongNodeError('未找到该订单')
     resetScanState()
   } finally {
     searching.value = false
@@ -519,6 +522,14 @@ async function handleScanCode(code: string) {
   console.log('[scanner] 收到扫码内容:', normalized)
   currentScanCode = normalized
   scanning.value = true
+  // 每次扫码前清空当前订单信息，避免残留上次数据
+  orderDetail.value = null
+  orderNo.value = ''
+  resetScanState()
+  locateCurtainId.value = null
+  locateStructureId.value = null
+  selectedStructureId.value = null
+  activeCurtainId.value = null
   try {
     await processBarcodeData(normalized)
     lastScanCode = normalized
@@ -697,11 +708,11 @@ async function processBarcodeData(codeId: string) {
       console.log('[scanner] 本次扫码业务处理成功，订单号:', content.orderNo)
     } else {
       console.warn('[scanner] 条码缺少 orderNo，无法处理:', content)
-      uni.showToast({ title: '该码暂不支持解析', icon: 'none' })
+      showWrongNodeError('该码暂不支持解析')
     }
   } catch (error) {
     console.error('[scanner] 条码解析/请求失败:', codeId, error)
-    uni.showToast({ title: '码ID无效或已过期', icon: 'none' })
+    showWrongNodeError('码ID无效或已过期')
   }
 }
 
@@ -763,7 +774,7 @@ const disabledId = computed(() =>
 
 function selectUser(user: WorkshopUserSimple) {
   if (user.id === disabledId.value) {
-    uni.showToast({ title: '主副操作员不能是同一人', icon: 'none' })
+    showWrongNodeError('主副操作员不能是同一人')
     return
   }
   if (pickerTarget.value === 'primary')
