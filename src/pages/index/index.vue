@@ -12,16 +12,6 @@
     <!-- 菜单区域 -->
     <MenuSection />
     <!-- 扫码按钮（可拖动） -->
-    <view
-      class="fixed z-10 h-100rpx w-100rpx flex items-center justify-center rounded-full bg-[#1890ff] shadow-lg"
-      :style="btnStyle"
-      @touchstart.stop="onTouchStart"
-      @touchmove.stop.prevent="onTouchMove"
-      @touchend.stop="onTouchEnd"
-    >
-      <view class="i-carbon-scan text-48rpx text-white" />
-    </view>
-
     <!-- 模拟扫码输入弹窗（命令式调用，仅占位） -->
     <wd-message-box />
   </view>

@@ -1,24 +1,6 @@
 <template>
   <scroll-view class="min-h-0 flex-1" scroll-y scroll-with-animation>
     <!-- 常用分组 -->
-    <view class="mx-20rpx mt-20rpx overflow-hidden rounded-16rpx bg-white">
-      <view class="flex items-center justify-between px-24rpx py-20rpx">
-        <text class="text-28rpx text-#333 font-500">常用</text>
-        <view class="p-10rpx" @click="handleGotoFavoriteSettings">
-          <wd-icon name="setting" size="32rpx" color="#999" />
-        </view>
-      </view>
-      <MenuGrid v-if="favoriteMenuItems.length > 0" :menus="favoriteMenuItems" />
-      <view
-        v-else
-        class="mx-24rpx mb-24rpx flex items-center border-1rpx border-#ddd rounded-12rpx border-dashed px-24rpx py-12rpx"
-        @click="handleGotoFavoriteSettings"
-      >
-        <wd-icon name="add" size="32rpx" color="#999" />
-        <text class="pl-10rpx text-28rpx text-#999">添加我常用的</text>
-      </view>
-    </view>
-
     <!-- 菜单分组 -->
     <view v-for="group in menuGroups" :key="group.key" class="mx-20rpx mt-20rpx overflow-hidden rounded-16rpx bg-white">
       <view class="px-24rpx pb-0 pt-20rpx">
