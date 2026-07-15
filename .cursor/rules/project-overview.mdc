@@ -10,6 +10,7 @@ alwaysApply: true
 - 使用最新的前端技术栈
 - 内置约定式路由、layout布局、请求封装、登录拦截、自定义tabbar等功能
 - 无需依赖 HBuilderX，支持命令行开发
+- **智仓业务部署约束**：App 打包仅装 Android 平板并锁定横屏；页面尺寸用固定 px，见 [tablet-landscape-adaptation.mdc](mdc:.cursor/rules/tablet-landscape-adaptation.mdc)
 
 ## 核心配置文件
 - [package.json](mdc:package.json) - 项目依赖和脚本配置

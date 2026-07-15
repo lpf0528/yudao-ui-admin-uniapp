@@ -1,0 +1,110 @@
+---
+description: Android 平板横屏适配规范（固定 px，禁止依赖 rpx 屏宽换算）
+alwaysApply: true
+---
+
+# Android 平板横屏适配规范
+
+本项目 **打包后只安装在 Android 平板，且锁定横屏**，不做手机适配。参考实现：`src/pages-curtain/process-node/index.vue`。
+
+## 根因（必读）
+
+uni-app 规则是 **`750rpx = 屏幕逻辑宽度`**。平板横屏逻辑宽度通常 >750，同样的 `rpx` / UnoCSS `text-84rpx` 会被放大数倍，造成字体与元素巨大、纵向溢出。
+
+**不要依赖** `manifest` 里的 `rpxCalcMaxDeviceWidth` / `rpxCalcBaseDeviceWidth`：真机上可能完全不生效。
+
+## 核心原则：放弃 rpx，改用固定 px
+
+新建或改造页面时：
+
+1. 样式里 **禁止裸写 `Nrpx`**
+2. 模板里 **禁止 UnoCSS 的 `*-Nrpx`**（如 `text-84rpx`、`mt-16rpx`、`p-24rpx`）
+3. 用下方 `$scale` / `$font-scale` + `fs()` / `rpx()` 统一换算为 `px`
+
+## 标准 SCSS 头（每个需适配的页面粘贴后微调）
+
+```scss
+/**
+ * Android 平板横屏专用（不做手机适配）。
+ * 真机 rpx 会按逻辑宽度被撑大，本页全部固定 px。
+ *
+ * $scale：整体大小，偏大调小（0.42/0.45），偏小调大（0.55/0.58）
+ * $font-scale：字号相对间距的额外放大（车间远距离可读）
+ * 10 寸横屏约 1280×800 逻辑像素时，推荐起步 0.5 / 1.35
+ */
+$scale: 0.5;
+$font-scale: 1.35;
+
+@function fs($size) {
+  @return $size * $font-scale * $scale * 1px;
+}
+
+@function rpx($size) {
+  @return $size * $scale * 1px;
+}
+```
+
+| 用途 | 写法 |
+|---|---|
+| 字号 | `font-size: fs(32);` |
+| 间距 / 圆角 / 宽高 / padding | `padding: rpx(16);` `gap: rpx(12);` `border-radius: rpx(8);` |
+| 模板图标 / 原子类 | `text-[28px]`、`mt-[8px]`（约等于原 rpx × `$scale`） |
+
+## 模板 UnoCSS 转换
+
+```vue
+<!-- ❌ 仍会随屏宽被撑大 -->
+<view class="i-carbon-user text-84rpx mt-16rpx" />
+
+<!-- ✅ 固定 px（任意值语法） -->
+<view class="i-carbon-user text-[28px] mt-[8px]" />
+```
+
+换算：`图标/间距 px ≈ 原 rpx × $scale`。头像等容器缩小后，图标要比公式结果再略小一点，避免溢出容器。
+
+## 横屏布局约定
+
+横屏高度有限，必须锁视口高度，内容区内滚动：
+
+```scss
+.page-body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+// 可滚动区域
+.page-scroll {
+  flex: 1;
+  min-height: 0;
+  height: 0; // scroll-view 在 flex 子项时建议显式高度约束
+}
+```
+
+- 顶部操作区 / 输入框 / 面板 **刻意压矮 padding**，避免半屏被占满
+- 多面板侧栏用 `overflow-y: auto` 兜底
+- `calc()` 里调用 SCSS 函数需插值：`min-width: calc(50% - #{rpx(6)});`
+
+## 调参顺序
+
+| 现象 | 调整 |
+|---|---|
+| 整体偏大 / 偏小 | 改 `$scale`（推荐区间 0.42 ~ 0.55） |
+| 只有字偏大 / 偏小 | 改 `$font-scale`（推荐区间 1.2 ~ 1.5） |
+| 纵向挤不下 | 减 padding、缩小空状态、侧栏可滚动 |
+
+## 检查清单（改页 / 新页）
+
+- [ ] 样式无裸 `Nrpx`，统一 `rpx()` / `fs()`
+- [ ] 模板无 `text-Nrpx` / `mt-Nrpx` / `p-Nrpx` 等，改为 `text-[Npx]` 等
+- [ ] 整页 `100vh + overflow: hidden`，内部 `scroll-view` / `overflow-y: auto`
+- [ ] **不**指望 `manifest` 的 rpxCalc* 配置解决问题
+- [ ] 起步参数：`$scale: 0.5`，`$font-scale: 1.35`（10 寸横屏）
+
+## 例外与注意
+
+- **wot-design-uni（`wd-*`）**：组件内部尺寸未必吃本页 `rpx()`，弹窗 / Picker / MessageBox 可能仍偏大，需单独覆盖或压缩
+- **打印标签 Canvas**：用 `px` 绘制，与本规范独立，见 `.claude/skills/print-label.md`
+- **百分比布局的图片**：一般不受 rpx 放大影响，通常不用改
+- **全局影响**：这是按页改造；未改造的页面在平板上仍可能巨大，应按本规范逐页处理

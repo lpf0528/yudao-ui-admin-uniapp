@@ -95,7 +95,7 @@ http.get<MyType>('/curtain/order/page', params)
 ### 样式系统
 
 - **优先用 UnoCSS 原子化类名**（配置见 `uno.config.ts`），减少 scoped 样式块
-- 尺寸使用 `rpx`（如 `p-24rpx`、`text-32rpx`）适配多端
+- **本项目仅部署 Android 平板横屏**：页面尺寸 **禁止依赖裸 `rpx` / UnoCSS `*-Nrpx`**，统一固定 `px`（见下方「平板横屏适配」）
 - 全局样式在 `src/style/`，主题变量在 `src/uni_modules/uni-scss/`
 
 ### 组件库
@@ -198,12 +198,39 @@ wd-navbar（fixed top，navigationStyle: 'custom'）
 
 ---
 
+## Android 平板横屏适配（强制）
+
+> 详细规则见 [`.cursor/rules/tablet-landscape-adaptation.mdc`](.cursor/rules/tablet-landscape-adaptation.mdc)。参考实现：`src/pages-curtain/process-node/index.vue`。
+
+**根因**：`750rpx = 屏幕逻辑宽度`，平板横屏逻辑宽 >750 时 rpx 被撑大数倍。`manifest` 的 `rpxCalcBaseDeviceWidth` 真机上可能无效，**不要依赖**。
+
+**做法**：样式用 `$scale` + `fs()` / `rpx()` 输出固定 `px`；模板把 `text-84rpx` 等改成 `text-[28px]`；整页 `100vh + overflow:hidden`，内容区滚动。
+
+```scss
+$scale: 0.5;        // 整体：偏大↓ 0.42；偏小↑ 0.55
+$font-scale: 1.35;  // 字号：偏大↓ 1.2；偏小↑ 1.5
+
+@function fs($size) { @return $size * $font-scale * $scale * 1px; }
+@function rpx($size) { @return $size * $scale * 1px; }
+```
+
+| 检查项 | 要求 |
+|---|---|
+| 样式 | 无裸 `Nrpx`，用 `rpx(N)` / `fs(N)` |
+| 模板 | 无 `*-Nrpx`，用 `text-[Npx]` / `mt-[Npx]` |
+| 布局 | `100vh` + 内部滚动；横屏压矮顶部 padding |
+| 组件库 | `wd-*` 内部尺寸可能仍偏大，需单独处理 |
+| Canvas 打印 | 独立用 px，见 print-label skill |
+
+---
+
 ## 窗帘模块开发约定（智仓-窗帘仓储系统）
 
 - 新页面放 `src/pages-curtain/<功能>/index.vue`，子页面放 `src/pages-curtain/<功能>/<子功能>/index.vue`
 - API 接口放 `src/api/curtain/<功能>/index.ts`，未实现的接口以 `// TODO:` 注释标明，对接时取消注释并实现
 - 分页列表遵循 `queryParams`（pageNo/pageSize）+ `filterParams`（筛选条件）双 ref 模式，见 `src/pages-curtain/order/index.vue`
 - Tabbar 配置在 `src/tabbar/config.ts`，新增模块入口在此配置
+- **新页面必须按「Android 平板横屏适配」用固定 px，不要写裸 rpx**
 
 ### 已实现页面概览
 

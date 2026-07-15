@@ -28,6 +28,17 @@ export default defineManifestConfig({
   'versionName': '1.0.0',
   'versionCode': '100',
   'transformPx': false,
+  /**
+   * rpx 计算基准（横屏平板适配关键）：
+   * App 全局锁定横屏，平板 windowWidth 很大（如 1280），默认 750rpx=屏宽 会把
+   * 1rpx 撑到约 1.7px，导致字体/元素巨大。这里限制 rpx 计算基准：
+   * - rpxCalcMaxDeviceWidth: 设备宽度超过该值(px)时，改用 baseDeviceWidth 作为换算基准
+   * - rpxCalcBaseDeviceWidth: 换算基准宽度(px)。取 560 => 1rpx≈0.75px，
+   *   图标/间距/文字整体等比缩小到平板横屏合适大小（远小于原来的“巨大”）。
+   * 若整体仍偏大，调小 rpxCalcBaseDeviceWidth；仍偏小则调大。
+   */
+  'rpxCalcMaxDeviceWidth': 750,
+  'rpxCalcBaseDeviceWidth': 560,
   'locale': VITE_FALLBACK_LOCALE, // 'zh-Hans'
   'h5': {
     router: {
@@ -42,6 +53,8 @@ export default defineManifestConfig({
     compatible: {
       ignoreVersion: true,
     },
+    /** 强制横屏（仅适配 Android 平板横屏模式） */
+    screenOrientation: ['landscape-primary', 'landscape-secondary'],
     /** 来自 https://gitee.com/yudaocode/yudao-ui-admin-uniapp/issues/IEZGWJ 反馈 */
     safearea: {
       bottom: {
@@ -63,6 +76,8 @@ export default defineManifestConfig({
         minSdkVersion: 21,
         targetSdkVersion: 30,
         abiFilters: ['armeabi-v7a', 'arm64-v8a'],
+        /** 锁定横屏 */
+        screenOrientation: ['landscape-primary', 'landscape-secondary'],
         permissions: [
           '<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>',
           '<uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"/>',

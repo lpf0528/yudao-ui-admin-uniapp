@@ -5,7 +5,6 @@ import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/o
 import type { ProcessNodeSimple } from '@/api/curtain/process-node/index'
 import type { WorkshopUserSimple } from '@/api/curtain/workshop-user/index'
 import { storeToRefs } from 'pinia'
-import { useMessage } from 'wot-design-uni/components/wd-message-box/index'
 import { getBarcodeRegistry } from '@/api/curtain/barcode-registry/index'
 import { getInstallProcess } from '@/api/curtain/install-process/index'
 import { getSalesOrderDetail } from '@/api/curtain/order'
@@ -13,12 +12,18 @@ import { createOrderProcessRecord } from '@/api/curtain/order-process-record/ind
 import { getMyProcessNodes } from '@/api/curtain/process-node/index'
 import { getWorkshopUserSimpleList } from '@/api/curtain/workshop-user/index'
 import { useDictStore, useOperatorStore } from '@/store'
+import { navigateBackPlus } from '@/utils'
 
 definePage({
   style: {
-    navigationBarTitleText: '工序操作',
+    navigationBarTitleText: '',
+    navigationStyle: 'custom',
   },
 })
+
+function handleBack() {
+  navigateBackPlus()
+}
 
 const operatorStore = useOperatorStore()
 const dictStore = useDictStore()
@@ -36,7 +41,6 @@ function getPrintableMaterials(materials?: SalesOrderMaterialDetail[]) {
 }
 const { primaryOperator, secondaryOperator } = storeToRefs(operatorStore)
 
-const message = useMessage()
 const showCompletedTip = ref(false)
 const showWrongNodeTip = ref(false)
 const errorTipMsg = ref('')
@@ -45,6 +49,8 @@ const userList = ref<WorkshopUserSimple[]>([])
 const processNodeList = ref<ProcessNodeSimple[]>([])
 const pickerTarget = ref<'primary' | 'secondary'>('primary')
 const showPicker = ref(false)
+const showCurtainTabsPopup = ref(false)
+const showProcessNodePopup = ref(false)
 const orderNo = ref('')
 const orderDetail = ref<SalesOrderDetail | null>(null)
 const searching = ref(false)
@@ -163,6 +169,11 @@ const activeCurtain = computed(() => {
   if (!orderDetail.value)
     return null
   return orderDetail.value.curtains.find(c => c.id === activeCurtainId.value) ?? null
+})
+
+const hasActiveCurtainImages = computed(() => {
+  const curtain = activeCurtain.value
+  return !!(curtain?.image1 || curtain?.image2)
 })
 
 watch(orderDetail, (detail) => {
@@ -368,23 +379,20 @@ async function restoreProcessNodeSelection(promptIfMissing = false) {
   if (!promptIfMissing)
     return
 
-  try {
-    await message.alert({
-      title: '请先选择当前工序',
-      msg: `您有 ${processNodeList.value.length} 个工序，请在上方选择您当前正在执行的工序后再扫码`,
-      confirmButtonText: '知道了',
-    })
-  } catch {
-    // 忽略
-  }
+  showProcessNodePopup.value = true
 }
 
-function selectNode(id: number) {
-  selectedNodeId.value = selectedNodeId.value === id ? null : id
-  scanContext.nodeId = selectedNodeId.value
-  if (selectedNodeId.value)
-    setNode(selectedNodeId.value)
-  saveProcessNodeCache(selectedNodeId.value)
+function openProcessNodePicker() {
+  showProcessNodePopup.value = true
+}
+
+/** 工序选择弹窗内点击：直接选中并关闭 */
+function selectNodeFromPopup(id: number) {
+  selectedNodeId.value = id
+  scanContext.nodeId = id
+  setNode(id)
+  saveProcessNodeCache(id)
+  showProcessNodePopup.value = false
 }
 
 watch(() => primaryOperator.value?.id, async () => {
@@ -398,6 +406,12 @@ function selectStructure(id: number) {
   scanContext.structureId = selectedStructureId.value
   if (selectedStructureId.value)
     setStructure(selectedStructureId.value)
+  if (selectedStructureId.value)
+    showCurtainTabsPopup.value = false
+}
+
+function onCurtainTabTap(curtainId: number) {
+  activeCurtainId.value = curtainId
 }
 
 const submitting = ref(false)
@@ -691,16 +705,7 @@ async function processBarcodeData(codeId: string) {
       if (selectedStructureId.value && !scanContext.structureId)
         setStructure(selectedStructureId.value)
       if (!selectedNodeId.value) {
-        try {
-          await message.confirm({
-            title: '请先选择当前工序',
-            msg: '您尚未选择当前工序，请在上方选择后再次扫码',
-            confirmButtonText: '知道了',
-            cancelButtonText: '取消',
-          })
-        } catch {
-          // 用户取消，无需处理
-        }
+        showProcessNodePopup.value = true
       } else {
         setNode(selectedNodeId.value)
         await commitIfReady()
@@ -800,61 +805,69 @@ function previewCurtainImage(url: string) {
       <view class="page-left">
         <!-- 操作员（置顶） -->
         <view class="operator-panel">
+          <view class="back-btn" @tap="handleBack">
+            <view class="i-carbon-chevron-left text-[28px] text-[#018d71]" />
+          </view>
           <view class="operator-item primary" @tap="openPicker('primary')">
             <view class="operator-avatar primary">
-              <view class="i-carbon-user-avatar-filled text-84rpx text-[#018d71]" />
+              <view class="i-carbon-user-avatar-filled text-[28px] text-[#018d71]" />
             </view>
             <view class="operator-info">
               <text class="operator-role">主操作员</text>
               <view class="operator-name-row">
                 <text class="operator-name primary">{{ primaryOperator ? primaryOperator.name : '请选择' }}</text>
-                <view class="i-carbon-chevron-down text-42rpx text-[#018d71]" />
+                <view class="i-carbon-chevron-down text-[16px] text-[#018d71]" />
               </view>
             </view>
           </view>
           <view class="operator-item secondary" @tap="openPicker('secondary')">
             <view class="operator-avatar secondary">
-              <view class="i-carbon-user-avatar-filled text-60rpx text-[#666]" />
+              <view class="i-carbon-user-avatar-filled text-[22px] text-[#666]" />
             </view>
             <view class="operator-info">
               <text class="operator-role secondary">副操作员</text>
               <view class="operator-name-row">
                 <text class="operator-name secondary">{{ secondaryOperator ? secondaryOperator.name : '请选择' }}</text>
-                <view class="i-carbon-chevron-down text-30rpx text-#999" />
+                <view class="i-carbon-chevron-down text-[14px] text-#999" />
                 <view
                   v-if="secondaryOperator"
-                  class="i-carbon-close-filled text-36rpx text-#ccc"
+                  class="i-carbon-close-filled text-[16px] text-#ccc"
                   @tap.stop="operatorStore.setSecondary(null)"
                 />
               </view>
             </view>
           </view>
-          <view class="operator-spacer" />
+          <!-- 订单号输入（紧挨副操作员） -->
+          <view class="order-input-wrap">
+            <view class="order-input-box">
+              <view class="i-carbon-document text-[24px] text-#aaa" />
+              <input
+                v-model="orderNo"
+                class="order-input"
+                placeholder="扫码或输入订单号"
+                placeholder-style="color:#bbb"
+                confirm-type="search"
+                @confirm="handleInputConfirm"
+              >
+              <view
+                class="i-carbon-close-filled text-[24px] text-#ccc"
+                @tap="orderNo = ''; orderDetail = null"
+              />
+            </view>
+          </view>
+          <view
+            class="process-entry"
+            @tap="primaryOperator && openProcessNodePicker()"
+          >
+            <view class="i-carbon-task text-[24px]" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'" />
+            <text class="process-entry-label" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'">工序</text>
+          </view>
           <view
             class="record-entry"
             @tap="primaryOperator && uni.navigateTo({ url: `/pages-curtain/process-node/operation-records/index?masterId=${primaryOperator.id}&masterName=${primaryOperator.name}` })"
           >
-            <view class="i-carbon-list-boxes text-60rpx" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'" />
+            <view class="i-carbon-list-boxes text-[24px]" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'" />
             <text class="record-entry-label" :class="primaryOperator ? 'text-[#018d71]' : 'text-#ccc'">操作记录</text>
-          </view>
-        </view>
-
-        <!-- 订单号输入 -->
-        <view class="order-input-wrap">
-          <view class="order-input-box">
-            <view class="i-carbon-document text-48rpx text-#aaa" />
-            <input
-              v-model="orderNo"
-              class="order-input"
-              placeholder="扫码或输入订单号"
-              placeholder-style="color:#bbb"
-              confirm-type="search"
-              @confirm="handleInputConfirm"
-            >
-            <view
-              class="i-carbon-close-filled text-48rpx text-#ccc"
-              @tap="orderNo = ''; orderDetail = null"
-            />
           </view>
         </view>
 
@@ -863,61 +876,44 @@ function previewCurtainImage(url: string) {
             <!-- 搜索中 -->
             <view v-if="searching" class="empty-tip">
               <wd-loading color="#018d71" />
-              <text class="mt-16rpx text-42rpx text-#999">查询中...</text>
+              <text class="mt-[8px] text-[21px] text-#999">查询中...</text>
             </view>
 
             <!-- 无结果 -->
             <view v-else-if="!orderDetail" class="empty-tip">
-              <view class="i-carbon-document text-120rpx text-#ccc" />
-              <text class="mt-16rpx text-42rpx text-#999">输入订单号后按回车查询</text>
+              <view class="i-carbon-document text-[60px] text-#ccc" />
+              <text class="mt-[8px] text-[21px] text-#999">输入订单号后按回车查询</text>
             </view>
 
             <!-- 面料单提示 -->
             <view v-else-if="isFabricOnly" class="fabric-warning">
-              <view class="i-carbon-warning text-72rpx text-[#fa8c16]" />
+              <view class="i-carbon-warning text-[36px] text-[#fa8c16]" />
               <text class="fabric-warning-text">该订单为面料单，不需要进行工序操作</text>
             </view>
 
             <!-- 订单详情 -->
             <template v-else>
-              <!-- 窗帘行列表（Tab） -->
-              <view class="curtain-tabs-card">
-                <scroll-view scroll-x class="curtain-tabs-scroll">
-                  <view class="curtain-tabs">
-                    <view
-                      v-for="curtain in orderDetail.curtains"
-                      :key="curtain.id"
-                      class="curtain-tab"
-                      :class="{ 'curtain-tab--active': curtain.id === activeCurtainId }"
-                      @tap="activeCurtainId = curtain.id"
-                    >
-                      <text class="curtain-tab-index">第{{ curtain.index }}帘</text>
-                      <text v-if="curtain.curtainName" class="curtain-tab-room">{{ curtain.curtainName }}</text>
-                    </view>
-                  </view>
-                </scroll-view>
-                <view v-if="activeCurtain" class="curtain-tab-content">
-                  <view
-                    v-for="(structure, structureIndex) in activeCurtain.structures"
-                    :key="structure.id"
-                    class="structure-block"
-                    :class="{
-                      'structure-block--active': structure.id === selectedStructureId,
-                      'structure-block--selectable': !locateStructureId,
-                    }"
-                    @tap="selectStructure(structure.id)"
-                  >
-                    <text class="structure-index-label">#{{ structureIndex + 1 }}</text>
-                    <text class="structure-name-label">{{ structure.structureName }}</text>
-                  </view>
-                </view>
+              <!-- 未选结构时：引导打开窗帘列表 -->
+              <view
+                v-if="!selectedStructure"
+                class="curtain-pick-hint"
+                @tap="showCurtainTabsPopup = true"
+              >
+                <view class="i-carbon-list-boxes text-[36px] text-[#018d71]" />
+                <text class="curtain-pick-hint-text">点击选择窗帘 / 结构</text>
               </view>
 
               <!-- 款式信息 -->
               <view v-if="selectedStructure" class="structure-detail-card">
                 <view class="structure-detail-header">
-                  <text class="structure-detail-title">款式信息</text>
-                  <text class="structure-detail-subtitle">{{ selectedStructure.curtain.curtainName }} · {{ selectedStructure.structure.structureName }}</text>
+                  <view class="structure-detail-header-main">
+                    <text class="structure-detail-title">款式信息</text>
+                    <text class="structure-detail-subtitle">{{ selectedStructure.curtain.curtainName }} · {{ selectedStructure.structure.structureName }}</text>
+                  </view>
+                  <view class="structure-detail-header-btn" @tap="showCurtainTabsPopup = true">
+                    <view class="i-carbon-list text-[20px]" />
+                    <text>窗帘列表</text>
+                  </view>
                 </view>
                 <view class="structure-detail-body">
                   <view v-if="selectedStructure.curtain.room" class="structure-detail-item">
@@ -1013,20 +1009,11 @@ function previewCurtainImage(url: string) {
             class="delivery-badge delivery-badge--panel"
             :class="`delivery-badge--${deliveryStatus.level}`"
           >
-            <view
-              class="delivery-badge-icon"
-              :class="{
-                'i-carbon-alarm': deliveryStatus.level === 'overdue',
-                'i-carbon-warning-filled': deliveryStatus.level === 'today',
-                'i-carbon-time': deliveryStatus.level === 'soon',
-                'i-carbon-calendar': deliveryStatus.level === 'normal',
-              }"
-            />
             <text class="delivery-text">{{ deliveryStatus.text }}</text>
             <text v-if="orderDetail?.deliveryDate" class="delivery-date">{{ orderDetail.deliveryDate }}</text>
           </view>
           <view v-else class="delivery-placeholder">
-            <view class="i-carbon-calendar text-72rpx text-#ccc" />
+            <view class="i-carbon-calendar text-[36px] text-#ccc" />
             <text class="delivery-placeholder-text">查询订单后显示交货提醒</text>
           </view>
         </view>
@@ -1034,23 +1021,31 @@ function previewCurtainImage(url: string) {
         <!-- 当前工序 -->
         <view v-if="primaryOperator" class="delivery-panel">
           <text class="delivery-panel-title">当前工序</text>
-          <view v-if="processNodeList.length" class="process-node-list">
-            <view
-              v-for="node in processNodeList"
-              :key="node.id"
-              class="process-node-chip"
-              :class="{ 'process-node-chip--active': selectedNodeId === node.id }"
-              @tap="selectNode(node.id)"
-            >
-              <view v-if="selectedNodeId === node.id" class="i-carbon-checkmark mr-8rpx text-42rpx" />
-              <text>{{ node.name }}</text>
-            </view>
+          <view v-if="selectedNodeId" class="process-node-current">
+            <text class="process-node-current-name">{{ selectedNodeName }}</text>
           </view>
+          <text v-else-if="processNodeList.length" class="process-node-empty">未选择工序，点击顶部「工序」选择</text>
           <text v-else class="process-node-empty">该操作员暂无工序配置</text>
         </view>
 
-        <!-- 窗帘图片 -->
-        <view v-if="primaryOperator && activeCurtain" class="delivery-panel">
+        <!-- 备注信息（一行展示；放到窗帘图片上面） -->
+        <view
+          v-if="primaryOperator && activeCurtain && (activeCurtain.note || selectedStructure?.structure.note)"
+          class="delivery-panel"
+        >
+          <text class="delivery-panel-title">备注信息</text>
+          <view class="curtain-notes-body">
+            <text v-if="activeCurtain.note" class="curtain-note-line">
+              窗帘备注：{{ activeCurtain.note }}
+            </text>
+            <text v-if="selectedStructure?.structure.note" class="curtain-note-line">
+              结构备注：{{ selectedStructure.structure.note }}
+            </text>
+          </view>
+        </view>
+
+        <!-- 窗帘图片（无图时不展示；仅一张时另一格空占位，保持固定大小） -->
+        <view v-if="primaryOperator && activeCurtain && hasActiveCurtainImages" class="delivery-panel">
           <text class="delivery-panel-title">窗帘图片</text>
           <view class="curtain-image-row">
             <view class="curtain-image-cell">
@@ -1063,7 +1058,7 @@ function previewCurtainImage(url: string) {
                   @tap="previewCurtainImage(activeCurtain.image1)"
                 />
                 <view v-else class="curtain-image-slot-empty">
-                  <view class="i-carbon-image text-48rpx text-#ccc" />
+                  <view class="i-carbon-image text-[24px] text-#ccc" />
                 </view>
               </view>
             </view>
@@ -1077,27 +1072,9 @@ function previewCurtainImage(url: string) {
                   @tap="previewCurtainImage(activeCurtain.image2)"
                 />
                 <view v-else class="curtain-image-slot-empty">
-                  <view class="i-carbon-image text-48rpx text-#ccc" />
+                  <view class="i-carbon-image text-[24px] text-#ccc" />
                 </view>
               </view>
-            </view>
-          </view>
-        </view>
-
-        <!-- 备注信息 -->
-        <view
-          v-if="primaryOperator && activeCurtain && (activeCurtain.note || selectedStructure?.structure.note)"
-          class="delivery-panel"
-        >
-          <text class="delivery-panel-title">备注信息</text>
-          <view class="curtain-notes-body">
-            <view v-if="activeCurtain.note" class="curtain-note-item">
-              <text class="curtain-note-label">窗帘备注</text>
-              <text class="curtain-note-value">{{ activeCurtain.note }}</text>
-            </view>
-            <view v-if="selectedStructure?.structure.note" class="curtain-note-item">
-              <text class="curtain-note-label">结构备注</text>
-              <text class="curtain-note-value">{{ selectedStructure.structure.note }}</text>
             </view>
           </view>
         </view>
@@ -1105,12 +1082,10 @@ function previewCurtainImage(url: string) {
     </view>
   </view>
 
-  <wd-message-box />
-
   <!-- 已完成工序居中提示 -->
   <view v-if="showCompletedTip" class="completed-tip-overlay">
     <view class="completed-tip-box">
-      <view class="i-carbon-checkmark-filled text-108rpx text-white" />
+      <view class="i-carbon-checkmark-filled text-[54px] text-white" />
       <text class="completed-tip-text">已完成【{{ selectedNodeName }}】</text>
     </view>
   </view>
@@ -1118,7 +1093,7 @@ function previewCurtainImage(url: string) {
   <!-- 错误居中提示（错误工序 / 提交失败） -->
   <view v-if="showWrongNodeTip" class="completed-tip-overlay">
     <view class="wrong-node-tip-box">
-      <view class="i-carbon-warning-filled text-108rpx text-white" />
+      <view class="i-carbon-warning-filled text-[54px] text-white" />
       <text class="completed-tip-text">{{ errorTipMsg || '当前窗帘不需要执行该工序' }}</text>
     </view>
   </view>
@@ -1127,8 +1102,8 @@ function previewCurtainImage(url: string) {
   <wd-popup v-model="showPicker" position="center">
     <view class="picker-wrap">
       <view class="picker-header">
-        <text class="text-45rpx text-#333 font-500">切换{{ pickerTarget === 'primary' ? '主' : '副' }}操作员</text>
-        <view class="i-carbon-close text-54rpx text-#999" @tap="showPicker = false" />
+        <text class="text-[23px] text-#333 font-500">切换{{ pickerTarget === 'primary' ? '主' : '副' }}操作员</text>
+        <view class="i-carbon-close text-[27px] text-#999" @tap="showPicker = false" />
       </view>
       <scroll-view scroll-y style="max-height: 50vh">
         <view
@@ -1142,19 +1117,102 @@ function previewCurtainImage(url: string) {
           @tap="selectUser(user)"
         >
           <text>{{ user.name }}</text>
-          <view v-if="user.id === currentSelectedId" class="i-carbon-checkmark text-48rpx text-[#018d71]" />
-          <text v-else-if="user.id === disabledId" class="text-36rpx text-#ccc">已选为{{ pickerTarget === 'primary' ? '副' : '主' }}操作员</text>
+          <view v-if="user.id === currentSelectedId" class="i-carbon-checkmark text-[24px] text-[#018d71]" />
+          <text v-else-if="user.id === disabledId" class="text-[18px] text-#ccc">已选为{{ pickerTarget === 'primary' ? '副' : '主' }}操作员</text>
         </view>
       </scroll-view>
+    </view>
+  </wd-popup>
+
+  <!-- 选择当前工序弹框 -->
+  <wd-popup v-model="showProcessNodePopup" position="center" :close-on-click-modal="true">
+    <view class="process-node-popup">
+      <view class="picker-header">
+        <text class="text-[23px] text-#333 font-500">请选择当前工序</text>
+        <view class="i-carbon-close text-[27px] text-#999" @tap="showProcessNodePopup = false" />
+      </view>
+      <scroll-view scroll-y style="max-height: 50vh">
+        <view v-if="processNodeList.length" class="process-node-popup-list">
+          <view
+            v-for="node in processNodeList"
+            :key="node.id"
+            class="process-node-popup-item"
+            :class="{ 'process-node-popup-item--selected': selectedNodeId === node.id }"
+            @tap="selectNodeFromPopup(node.id)"
+          >
+            <view v-if="selectedNodeId === node.id" class="i-carbon-checkmark mr-[4px] text-[20px]" />
+            <text>{{ node.name }}</text>
+          </view>
+        </view>
+        <view v-else class="process-node-popup-empty">
+          <text>暂无工序配置</text>
+        </view>
+      </scroll-view>
+    </view>
+  </wd-popup>
+
+  <!-- 窗帘行列表弹框 -->
+  <wd-popup v-model="showCurtainTabsPopup" position="center" :close-on-click-modal="true">
+    <view class="curtain-tabs-popup">
+      <view class="picker-header">
+        <text class="text-[23px] text-#333 font-500">窗帘列表</text>
+        <view class="i-carbon-close text-[27px] text-#999" @tap="showCurtainTabsPopup = false" />
+      </view>
+      <view v-if="orderDetail" class="curtain-tabs-card curtain-tabs-card--popup">
+        <scroll-view scroll-x class="curtain-tabs-scroll">
+          <view class="curtain-tabs">
+            <view
+              v-for="curtain in orderDetail.curtains"
+              :key="curtain.id"
+              class="curtain-tab"
+              :class="{ 'curtain-tab--active': curtain.id === activeCurtainId }"
+              @tap="onCurtainTabTap(curtain.id)"
+            >
+              <text class="curtain-tab-index">第{{ curtain.index }}帘</text>
+              <text v-if="curtain.curtainName" class="curtain-tab-room">{{ curtain.curtainName }}</text>
+            </view>
+          </view>
+        </scroll-view>
+        <scroll-view scroll-y class="curtain-tabs-popup-body">
+          <view v-if="activeCurtain" class="curtain-tab-content">
+            <view
+              v-for="(structure, structureIndex) in activeCurtain.structures"
+              :key="structure.id"
+              class="structure-block"
+              :class="{
+                'structure-block--active': structure.id === selectedStructureId,
+                'structure-block--selectable': !locateStructureId,
+              }"
+              @tap="selectStructure(structure.id)"
+            >
+              <text class="structure-index-label">#{{ structureIndex + 1 }}</text>
+              <text class="structure-name-label">{{ structure.structureName }}</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
     </view>
   </wd-popup>
 </template>
 
 <style lang="scss" scoped>
-$font-scale: 1.5;
+/**
+ * Android 平板横屏专用（不做手机适配）。
+ * 真机 rpx 会按逻辑宽度被撑大，本页全部固定 px，渲染与屏幕宽度无关。
+ *
+ * 单一总开关 $scale：偏大调小（0.42/0.45），偏小调大（0.55/0.58）。
+ * $font-scale 控制字号相对间距的额外放大（车间远距离可读）。
+ * 10 寸横屏约 1280×800 逻辑像素时，0.5 / 1.35 可读且不易纵向溢出。
+ */
+$scale: 0.5;
+$font-scale: 1.35;
 
 @function fs($size) {
-  @return $size * $font-scale * 1rpx;
+  @return $size * $font-scale * $scale * 1px;
+}
+
+@function rpx($size) {
+  @return $size * $scale * 1px;
 }
 
 .page-body {
@@ -1162,14 +1220,18 @@ $font-scale: 1.5;
   flex-direction: column;
   height: 100vh;
   background-color: #f5f5f5;
+  overflow: hidden;
+  /* 自定义导航栏全屏时避开状态栏 */
+  padding-top: var(--status-bar-height, env(safe-area-inset-top));
+  box-sizing: border-box;
 }
 
 .page-split {
   display: flex;
   flex: 1;
   min-height: 0;
-  gap: 20rpx;
-  padding: 20rpx 24rpx 24rpx;
+  gap: rpx(16);
+  padding: rpx(12) rpx(20);
   overflow: hidden;
 }
 
@@ -1180,7 +1242,7 @@ $font-scale: 1.5;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: rpx(16);
   min-height: 0;
 }
 
@@ -1191,7 +1253,7 @@ $font-scale: 1.5;
 }
 
 .page-left-inner {
-  padding: 0 0 24rpx;
+  padding: 0 0 rpx(24);
 }
 
 .page-right {
@@ -1199,8 +1261,8 @@ $font-scale: 1.5;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
-  padding: 4rpx 0 24rpx;
+  gap: rpx(16);
+  padding: rpx(4) 0 rpx(24);
   height: 100%;
   overflow-y: auto;
   box-sizing: border-box;
@@ -1208,9 +1270,9 @@ $font-scale: 1.5;
 
 .delivery-panel {
   background-color: #fff;
-  border-radius: 16rpx;
-  padding: 24rpx;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+  border-radius: rpx(12);
+  padding: rpx(16) rpx(20);
+  box-shadow: 0 rpx(4) rpx(16) rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
 }
 
@@ -1218,7 +1280,7 @@ $font-scale: 1.5;
   display: block;
   font-size: fs(32);
   color: #333;
-  margin-bottom: 16rpx;
+  margin-bottom: rpx(16);
   font-weight: 600;
 }
 
@@ -1227,11 +1289,11 @@ $font-scale: 1.5;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12rpx;
-  padding: 32rpx 16rpx;
+  gap: rpx(12);
+  padding: rpx(32) rpx(16);
   background-color: #fafafa;
-  border-radius: 12rpx;
-  border: 2rpx dashed #e8e8e8;
+  border-radius: rpx(12);
+  border: rpx(2) dashed #e8e8e8;
 }
 
 .delivery-placeholder-text {
@@ -1245,40 +1307,83 @@ $font-scale: 1.5;
   flex-direction: row;
   align-items: center;
   flex-shrink: 0;
-  padding: 24rpx 28rpx;
+  padding: rpx(16) rpx(20);
   background-color: #fff;
-  border-radius: 16rpx;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+  border-radius: rpx(12);
+  box-shadow: 0 rpx(4) rpx(16) rgba(0, 0, 0, 0.06);
 }
 
-.operator-spacer {
+.back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: rpx(56);
+  height: rpx(56);
+  margin-right: rpx(12);
+  border-radius: rpx(10);
+  background-color: #e8f4f0;
+}
+
+.order-input-wrap {
   flex: 1;
+  min-width: 0;
+  margin: 0 rpx(16) 0 rpx(24);
+}
+
+.order-input-box {
+  display: flex;
+  align-items: center;
+  gap: rpx(12);
+  padding: 0 rpx(16);
+  height: rpx(56);
+  background-color: #f5f5f5;
+  border-radius: rpx(10);
+  border: rpx(1) solid #e8e8e8;
+}
+
+.order-input {
+  flex: 1;
+  min-width: 0;
+  font-size: fs(28);
+  color: #333;
 }
 
 .record-entry {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8rpx;
-  padding: 0 8rpx;
+  gap: rpx(8);
+  padding: 0 rpx(8);
   flex-shrink: 0;
 }
 
-.record-entry-label {
+.process-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: rpx(8);
+  padding: 0 rpx(8);
+  flex-shrink: 0;
+}
+
+.record-entry-label,
+.process-entry-label {
   font-size: fs(22);
 }
 
 .operator-item {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 
   &.primary {
-    gap: 18rpx;
+    gap: rpx(18);
   }
 
   &.secondary {
-    gap: 12rpx;
-    margin-left: 32rpx;
+    gap: rpx(12);
+    margin-left: rpx(20);
   }
 }
 
@@ -1290,14 +1395,14 @@ $font-scale: 1.5;
   flex-shrink: 0;
 
   &.primary {
-    width: 100rpx;
-    height: 100rpx;
+    width: rpx(72);
+    height: rpx(72);
     background-color: #e8f4f0;
   }
 
   &.secondary {
-    width: 66rpx;
-    height: 66rpx;
+    width: rpx(52);
+    height: rpx(52);
     background-color: #f5f5f5;
   }
 }
@@ -1310,18 +1415,18 @@ $font-scale: 1.5;
 .operator-role {
   font-size: fs(22);
   color: #333;
-  margin-bottom: 6rpx;
+  margin-bottom: rpx(6);
 
   &.secondary {
     font-size: fs(20);
-    margin-bottom: 4rpx;
+    margin-bottom: rpx(4);
   }
 }
 
 .operator-name-row {
   display: flex;
   align-items: center;
-  gap: 6rpx;
+  gap: rpx(6);
 }
 
 .operator-name {
@@ -1343,34 +1448,21 @@ $font-scale: 1.5;
   }
 }
 
-.process-node-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-}
-
-.process-node-chip {
+.process-node-current {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 18rpx 20rpx;
-  border-radius: 10rpx;
-  border: 2rpx solid #ccc;
-  background-color: #e0e0e0;
-  font-size: fs(36);
-  color: #666;
-  font-weight: 500;
-  flex: 1;
-  min-width: calc(50% - 6rpx);
-  box-sizing: border-box;
+  padding: rpx(20) rpx(16);
+  border-radius: rpx(10);
+  background-color: #018d71;
+  box-shadow: 0 rpx(4) rpx(12) rgba(1, 141, 113, 0.28);
+}
 
-  &--active {
-    background-color: #018d71;
-    border-color: #018d71;
-    color: #fff;
-    font-weight: 600;
-    box-shadow: 0 4rpx 12rpx rgba(1, 141, 113, 0.28);
-  }
+.process-node-current-name {
+  font-size: fs(32);
+  color: #fff;
+  font-weight: 600;
+  text-align: center;
 }
 
 .process-node-empty {
@@ -1380,7 +1472,7 @@ $font-scale: 1.5;
 
 .curtain-image-row {
   display: flex;
-  gap: 12rpx;
+  gap: rpx(12);
 }
 
 .curtain-image-cell {
@@ -1393,8 +1485,8 @@ $font-scale: 1.5;
   position: relative;
   width: 100%;
   padding-bottom: 100%;
-  border-radius: 12rpx;
-  border: 1rpx solid #e8e8e8;
+  border-radius: rpx(12);
+  border: rpx(1) solid #e8e8e8;
   background-color: #fafafa;
   overflow: hidden;
 }
@@ -1418,51 +1510,14 @@ $font-scale: 1.5;
 .curtain-notes-body {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: rpx(10);
 }
 
-.curtain-note-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  padding: 12rpx 16rpx;
-  background-color: #fafafa;
-  border-radius: 10rpx;
-  border: 1rpx solid #e8e8e8;
-}
-
-.curtain-note-label {
-  font-size: fs(32);
-  color: #333;
-  font-weight: 600;
-}
-
-.curtain-note-value {
-  font-size: fs(32);
+.curtain-note-line {
+  font-size: fs(28);
   color: #333;
   line-height: 1.5;
   word-break: break-all;
-}
-
-.order-input-wrap {
-  flex-shrink: 0;
-}
-
-.order-input-box {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  padding: 0 28rpx;
-  height: 88rpx;
-  background-color: #fff;
-  border-radius: 12rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
-}
-
-.order-input {
-  flex: 1;
-  font-size: fs(30);
-  color: #333;
 }
 
 .empty-tip {
@@ -1470,8 +1525,8 @@ $font-scale: 1.5;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 120rpx 40rpx;
-  min-height: 400rpx;
+  padding: rpx(60) rpx(40);
+  min-height: rpx(240);
 }
 
 .delivery-badge {
@@ -1479,14 +1534,14 @@ $font-scale: 1.5;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
-  padding: 16rpx 20rpx;
-  border-radius: 12rpx;
+  gap: rpx(8);
+  padding: rpx(16) rpx(20);
+  border-radius: rpx(12);
   flex-shrink: 0;
 
   &--panel {
-    padding: 28rpx 20rpx;
-    gap: 12rpx;
+    padding: rpx(16) rpx(16);
+    gap: rpx(8);
   }
 
   &--overdue {
@@ -1510,10 +1565,6 @@ $font-scale: 1.5;
   }
 }
 
-.delivery-badge-icon {
-  font-size: fs(56);
-}
-
 .delivery-text {
   font-size: fs(32);
   font-weight: 600;
@@ -1524,7 +1575,7 @@ $font-scale: 1.5;
 .delivery-date {
   font-size: fs(24);
   opacity: 0.75;
-  margin-top: 4rpx;
+  margin-top: rpx(4);
 }
 
 .fabric-warning {
@@ -1532,15 +1583,15 @@ $font-scale: 1.5;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60rpx 40rpx;
+  padding: rpx(60) rpx(40);
   background-color: #fffbe6;
-  border: 1rpx solid #ffe58f;
-  border-radius: 12rpx;
-  margin-bottom: 20rpx;
+  border: rpx(1) solid #ffe58f;
+  border-radius: rpx(12);
+  margin-bottom: rpx(20);
 }
 
 .fabric-warning-text {
-  margin-top: 16rpx;
+  margin-top: rpx(16);
   font-size: fs(28);
   color: #d46b08;
   text-align: center;
@@ -1548,19 +1599,19 @@ $font-scale: 1.5;
 
 .curtain-card {
   background-color: #f5f5f5;
-  border-radius: 12rpx;
-  margin-bottom: 20rpx;
+  border-radius: rpx(12);
+  margin-bottom: rpx(20);
   overflow: hidden;
-  border: 2rpx solid #e0e0e0;
+  border: rpx(2) solid #e0e0e0;
 }
 
 .curtain-header {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  padding: 22rpx 32rpx;
+  gap: rpx(12);
+  padding: rpx(22) rpx(32);
   background-color: #e8e8e8;
-  border-bottom: 1rpx solid #d5d5d5;
+  border-bottom: rpx(1) solid #d5d5d5;
 }
 
 .curtain-index {
@@ -1584,10 +1635,10 @@ $font-scale: 1.5;
 .structure-block {
   display: inline-flex;
   align-items: center;
-  gap: 12rpx;
-  padding: 8rpx 12rpx;
-  border-radius: 8rpx;
-  border: 2rpx solid #e0e0e0;
+  gap: rpx(12);
+  padding: rpx(8) rpx(12);
+  border-radius: rpx(8);
+  border: rpx(2) solid #e0e0e0;
   background-color: #f5f5f5;
 
   &--active {
@@ -1603,14 +1654,14 @@ $font-scale: 1.5;
 }
 
 .structure-index-label {
-  font-size: fs(36);
+  font-size: fs(28);
   color: #018d71;
   font-weight: 700;
   flex-shrink: 0;
 }
 
 .structure-name-label {
-  font-size: fs(36);
+  font-size: fs(28);
   color: #333;
   font-weight: 600;
   min-width: 0;
@@ -1619,10 +1670,10 @@ $font-scale: 1.5;
 
 .curtain-tabs-card {
   background-color: #fff;
-  border-radius: 12rpx;
-  margin-bottom: 20rpx;
+  border-radius: rpx(12);
+  margin-bottom: rpx(20);
   overflow: hidden;
-  border: 2rpx solid #e0e0e0;
+  border: rpx(2) solid #e0e0e0;
 }
 
 .curtain-tabs-scroll {
@@ -1633,16 +1684,16 @@ $font-scale: 1.5;
 .curtain-tabs {
   display: flex;
   background-color: #f5f5f5;
-  border-bottom: 2rpx solid #e0e0e0;
+  border-bottom: rpx(2) solid #e0e0e0;
 }
 
 .curtain-tab {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
-  gap: 8rpx;
-  padding: 18rpx 28rpx;
-  border-bottom: 4rpx solid transparent;
+  gap: rpx(8);
+  padding: rpx(18) rpx(28);
+  border-bottom: rpx(4) solid transparent;
   flex-shrink: 0;
 
   &--active {
@@ -1674,35 +1725,58 @@ $font-scale: 1.5;
 .curtain-tab-content {
   display: flex;
   flex-wrap: wrap;
-  gap: 16rpx 24rpx;
-  padding: 16rpx 32rpx 8rpx;
+  gap: rpx(16) rpx(24);
+  padding: rpx(16) rpx(32) rpx(8);
 }
 
 .curtain-tab-name {
   font-size: fs(26);
   color: #666;
-  padding: 16rpx 32rpx 8rpx;
+  padding: rpx(16) rpx(32) rpx(8);
   font-weight: 600;
-  border-bottom: 1rpx solid #f0f0f0;
+  border-bottom: rpx(1) solid #f0f0f0;
 }
 
 .structure-detail-card {
   background-color: #fff;
-  border-radius: 12rpx;
-  margin-bottom: 20rpx;
+  border-radius: rpx(12);
+  margin-bottom: rpx(20);
   overflow: hidden;
-  border: 2rpx solid #018d71;
+  border: rpx(2) solid #018d71;
 }
 
 .structure-detail-header {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 20rpx;
-  padding: 20rpx 28rpx;
+  justify-content: space-between;
+  gap: rpx(16);
+  padding: rpx(16) rpx(20);
   background-color: #e8f4f0;
-  border-bottom: 1rpx solid #c8e8df;
+  border-bottom: rpx(1) solid #c8e8df;
+}
+
+.structure-detail-header-main {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: rpx(16);
+  min-width: 0;
+  flex: 1;
+}
+
+.structure-detail-header-btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: rpx(6);
+  flex-shrink: 0;
+  padding: rpx(10) rpx(16);
+  border-radius: rpx(8);
+  background-color: #018d71;
+  color: #fff;
+  font-size: fs(24);
+  font-weight: 600;
 }
 
 .structure-detail-title {
@@ -1720,11 +1794,48 @@ $font-scale: 1.5;
   word-break: break-all;
 }
 
+.curtain-pick-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: rpx(12);
+  padding: rpx(48) rpx(24);
+  margin-bottom: rpx(16);
+  background-color: #fff;
+  border-radius: rpx(12);
+  border: rpx(2) dashed #018d71;
+}
+
+.curtain-pick-hint-text {
+  font-size: fs(28);
+  color: #018d71;
+  font-weight: 600;
+}
+
+.curtain-tabs-popup {
+  width: 720px;
+  max-width: 90vw;
+  background-color: #fff;
+  border-radius: rpx(16);
+  overflow: hidden;
+}
+
+.curtain-tabs-card--popup {
+  margin-bottom: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.curtain-tabs-popup-body {
+  max-height: 50vh;
+}
+
 .structure-detail-body {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  padding: 12rpx;
-  gap: 10rpx;
+  padding: rpx(12);
+  gap: rpx(10);
 }
 
 .structure-detail-item {
@@ -1733,9 +1844,9 @@ $font-scale: 1.5;
   align-items: center;
   justify-content: center;
   min-width: 0;
-  padding: 12rpx 10rpx;
-  border: 2rpx solid #e0e0e0;
-  border-radius: 8rpx;
+  padding: rpx(12) rpx(10);
+  border: rpx(2) solid #e0e0e0;
+  border-radius: rpx(8);
   box-sizing: border-box;
   text-align: center;
 
@@ -1745,16 +1856,16 @@ $font-scale: 1.5;
 }
 
 .structure-detail-label {
-  font-size: fs(38);
+  font-size: fs(28);
   color: #1890ff;
-  margin-bottom: 8rpx;
+  margin-bottom: rpx(6);
   font-weight: 500;
   text-align: center;
   width: 100%;
 }
 
 .structure-detail-value {
-  font-size: fs(40);
+  font-size: fs(30);
   color: #333;
   font-weight: 600;
   word-break: break-all;
@@ -1763,8 +1874,8 @@ $font-scale: 1.5;
 }
 
 .structure-materials-section {
-  border-top: 1rpx solid #c8e8df;
-  padding: 20rpx 28rpx 24rpx;
+  border-top: rpx(1) solid #c8e8df;
+  padding: rpx(20) rpx(28) rpx(24);
   background-color: #fff;
 }
 
@@ -1773,7 +1884,7 @@ $font-scale: 1.5;
   font-size: fs(28);
   font-weight: 600;
   color: #018d71;
-  margin-bottom: 16rpx;
+  margin-bottom: rpx(16);
   text-align: center;
 }
 
@@ -1782,12 +1893,12 @@ $font-scale: 1.5;
   font-size: fs(26);
   color: #bbb;
   text-align: center;
-  padding: 16rpx 0;
+  padding: rpx(16) 0;
 }
 
 .material-detail-table {
-  border: 2rpx solid #d4ebe4;
-  border-radius: 8rpx;
+  border: rpx(2) solid #d4ebe4;
+  border-radius: rpx(8);
   overflow: hidden;
 }
 
@@ -1795,20 +1906,20 @@ $font-scale: 1.5;
 .material-detail-item {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  padding: 14rpx 20rpx;
+  gap: rpx(12);
+  padding: rpx(14) rpx(20);
 }
 
 .material-detail-header {
   background-color: #e8f4f0;
-  border-bottom: 1rpx solid #d4ebe4;
+  border-bottom: rpx(1) solid #d4ebe4;
 }
 
 .material-detail-item {
   background-color: #f5f9f7;
 
   &:not(:last-child) {
-    border-bottom: 1rpx solid #e8f0ec;
+    border-bottom: rpx(1) solid #e8f0ec;
   }
 }
 
@@ -1833,18 +1944,68 @@ $font-scale: 1.5;
 }
 
 .picker-wrap {
-  width: 560rpx;
-  padding: 32rpx 0 0;
-  border-radius: 16rpx;
+  width: rpx(560);
+  padding: rpx(32) 0 0;
+  border-radius: rpx(16);
   overflow: hidden;
+  background-color: #fff;
+}
+
+.process-node-popup {
+  width: 640px;
+  max-width: 90vw;
+  padding: rpx(32) 0 0;
+  border-radius: rpx(16);
+  overflow: hidden;
+  background-color: #fff;
+}
+
+.process-node-popup-list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: rpx(16);
+  padding: rpx(24) rpx(28) rpx(32);
+  background-color: #f5f5f5;
+}
+
+.process-node-popup-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: rpx(6);
+  padding: rpx(16) rpx(24);
+  border-radius: rpx(8);
+  border: rpx(2) solid #d9d9d9;
+  background-color: #e8e8e8;
+  font-size: fs(30);
+  color: #555;
+  font-weight: 500;
+  box-sizing: border-box;
+
+  &--selected {
+    background-color: #018d71;
+    border-color: #018d71;
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 rpx(4) rpx(12) rgba(1, 141, 113, 0.28);
+  }
+}
+
+.process-node-popup-empty {
+  padding: rpx(48) rpx(32);
+  text-align: center;
+  font-size: fs(28);
+  color: #bbb;
+  background-color: #f5f5f5;
 }
 
 .picker-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32rpx 24rpx;
-  border-bottom: 1rpx solid #f0f0f0;
+  padding: 0 rpx(32) rpx(24);
+  border-bottom: rpx(1) solid #f0f0f0;
 }
 
 .completed-tip-overlay {
@@ -1864,36 +2025,36 @@ $font-scale: 1.5;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20rpx;
-  padding: 56rpx 80rpx;
+  gap: rpx(20);
+  padding: rpx(56) rpx(80);
   background-color: rgba(1, 141, 113, 0.92);
-  border-radius: 24rpx;
-  box-shadow: 0 8rpx 40rpx rgba(1, 141, 113, 0.4);
+  border-radius: rpx(24);
+  box-shadow: 0 rpx(8) rpx(40) rgba(1, 141, 113, 0.4);
 }
 
 .wrong-node-tip-box {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20rpx;
-  padding: 56rpx 80rpx;
+  gap: rpx(20);
+  padding: rpx(56) rpx(80);
   background-color: rgba(245, 34, 45, 0.92);
-  border-radius: 24rpx;
-  box-shadow: 0 8rpx 40rpx rgba(245, 34, 45, 0.4);
+  border-radius: rpx(24);
+  box-shadow: 0 rpx(8) rpx(40) rgba(245, 34, 45, 0.4);
 }
 
 .completed-tip-text {
   font-size: fs(44);
   font-weight: 700;
   color: #fff;
-  letter-spacing: 4rpx;
+  letter-spacing: rpx(4);
 }
 
 .node-completed-tip {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 10rpx;
+  gap: rpx(10);
   background-color: #f0faf7;
   border-color: #018d71;
 }
@@ -1908,16 +2069,16 @@ $font-scale: 1.5;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28rpx 32rpx;
+  padding: rpx(28) rpx(32);
   font-size: fs(30);
   color: #333;
 
   &:first-child {
-    margin-top: 16rpx;
+    margin-top: rpx(16);
   }
 
   &:last-child {
-    margin-bottom: 16rpx;
+    margin-bottom: rpx(16);
   }
 
   &--selected {
@@ -1934,13 +2095,13 @@ $font-scale: 1.5;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16rpx;
-  margin-top: 24rpx;
-  height: 96rpx;
-  border-radius: 16rpx;
+  gap: rpx(16);
+  margin-top: rpx(24);
+  height: rpx(96);
+  border-radius: rpx(16);
   background-color: #018d71;
   color: #fff;
-  box-shadow: 0 4rpx 16rpx rgba(1, 141, 113, 0.35);
+  box-shadow: 0 rpx(4) rpx(16) rgba(1, 141, 113, 0.35);
 
   &--disabled {
     background-color: #b2b2b2;

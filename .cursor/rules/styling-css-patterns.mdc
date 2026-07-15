@@ -39,16 +39,21 @@
   
   .content {
     width: 100%;
-    max-width: 600rpx;
+    max-width: 300px; /* 平板横屏用固定 px，见 tablet-landscape-adaptation */
   }
 }
 </style>
 
-## 响应式设计
-- 使用 rpx 单位适配不同屏幕
-- 支持横屏和竖屏布局
-- 使用 flexbox 和 grid 布局
-- 考虑不同平台的样式差异
+## 响应式 / 平板横屏（本项目强制）
+
+本仓库 **仅部署 Android 平板横屏**，禁止依赖裸 `rpx` / UnoCSS `*-Nrpx` 做屏宽适配。
+
+- 详见 [tablet-landscape-adaptation.mdc](mdc:.cursor/rules/tablet-landscape-adaptation.mdc)
+- 参考页：`src/pages-curtain/process-node/index.vue`
+- 样式用 `$scale` + `fs()` / `rpx()` 输出固定 `px`；模板用 `text-[Npx]`
+- 起步参数：`$scale: 0.5`，`$font-scale: 1.35`
+- 布局：`100vh + overflow:hidden`，内容区滚动
+
 ---
 globs: *.vue,*.scss,*.css
 ---
