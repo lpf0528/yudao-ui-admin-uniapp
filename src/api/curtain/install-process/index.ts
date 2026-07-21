@@ -1,3 +1,4 @@
+import type { CustomRequestOptions } from '@/http/types'
 import { httpGet } from '@/http/http'
 
 export interface InstallProcess {
@@ -9,6 +10,6 @@ export interface InstallProcess {
   createTime: string
 }
 
-export function getInstallProcess(id: number) {
-  return httpGet<InstallProcess>('/zc/curtain-install-process/get', { id })
+export function getInstallProcess(id: number, options?: Partial<CustomRequestOptions>) {
+  return httpGet<InstallProcess>('/zc/curtain-install-process/get', { id }, undefined, options)
 }

@@ -1,3 +1,4 @@
+import type { CustomRequestOptions } from '@/http/types'
 import { http } from '@/http/http'
 
 export interface OrderProcessRecordCreateReq {
@@ -12,8 +13,8 @@ export interface OrderProcessRecordCreateReq {
   imageUrls?: string[]
 }
 
-export function createOrderProcessRecord(data: OrderProcessRecordCreateReq) {
-  return http.post<number>('/zc/order-process-record/create', data)
+export function createOrderProcessRecord(data: OrderProcessRecordCreateReq, options?: Partial<CustomRequestOptions>) {
+  return http.post<number>('/zc/order-process-record/create', data, undefined, undefined, options)
 }
 
 export interface OrderProcessRecord {

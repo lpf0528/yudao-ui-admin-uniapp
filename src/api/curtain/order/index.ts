@@ -1,4 +1,4 @@
-import type { PageResult } from '@/http/types'
+import type { CustomRequestOptions, PageResult } from '@/http/types'
 import { httpGet, httpPut } from '@/http/http'
 
 export const MAT_STATUS = {
@@ -147,8 +147,8 @@ export interface SalesOrderDetail extends SalesOrder {
 }
 
 /** 获取销售订单完整详情（id 与 orderNo 二选一，orderNo 优先） */
-export function getSalesOrderDetail(params: { id?: number, orderNo?: string }) {
-  return httpGet<SalesOrderDetail>('/zc/sales-order/detail', params as Record<string, any>)
+export function getSalesOrderDetail(params: { id?: number, orderNo?: string }, options?: Partial<CustomRequestOptions>) {
+  return httpGet<SalesOrderDetail>('/zc/sales-order/detail', params as Record<string, any>, undefined, options)
 }
 
 /** 成品订单裁剪请求 */

@@ -1,3 +1,4 @@
+import type { CustomRequestOptions } from '@/http/types'
 import { httpGet, httpPost } from '@/http/http'
 
 export interface BarcodeRegistryVO {
@@ -9,8 +10,8 @@ export interface BarcodeRegistryVO {
   createTime: string
 }
 
-export function getBarcodeRegistry(codeId: string) {
-  return httpGet<BarcodeRegistryVO>('/zc/barcode-registry/get', { codeId })
+export function getBarcodeRegistry(codeId: string, options?: Partial<CustomRequestOptions>) {
+  return httpGet<BarcodeRegistryVO>('/zc/barcode-registry/get', { codeId }, undefined, options)
 }
 
 export interface BarcodeRegistryCreateReq {

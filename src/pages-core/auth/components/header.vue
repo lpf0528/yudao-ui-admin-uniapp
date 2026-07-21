@@ -1,7 +1,7 @@
 <template>
-  <view class="header flex flex-col items-center pb-60rpx pt-120rpx">
-    <image class="mb-24rpx h-160rpx w-160rpx" src="/static/logo.svg" mode="aspectFit" />
-    <view class="text-44rpx text-[#1890ff] font-bold">
+  <view class="header flex flex-col items-center">
+    <image class="header-logo" src="/static/logo.svg" mode="aspectFit" />
+    <view class="header-title">
       {{ title }}
     </view>
   </view>
@@ -10,3 +10,24 @@
 <script lang="ts" setup>
 const title = import.meta.env.VITE_APP_TITLE // 应用标题
 </script>
+
+<style lang="scss" scoped>
+@import '../styles/auth.scss';
+
+.header {
+  padding-top: rpx(120);
+  padding-bottom: rpx(60);
+}
+
+.header-logo {
+  width: rpx(160);
+  height: rpx(160);
+  margin-bottom: rpx(24);
+}
+
+.header-title {
+  font-size: fs(44);
+  color: #1890ff;
+  font-weight: bold;
+}
+</style>

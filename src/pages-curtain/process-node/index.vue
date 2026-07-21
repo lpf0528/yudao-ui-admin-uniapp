@@ -45,27 +45,151 @@ const showCompletedTip = ref(false)
 const showWrongNodeTip = ref(false)
 const errorTipMsg = ref('')
 
-/** 保持引用，避免 APP 端 InnerAudioContext 被 GC 后静默不播 */
+/**
+ * ------- 调试日志面板：打包后 APP 端无法看控制台，扫码相关日志额外落到此处用弹窗展示 -------
+ * 问题已定位，暂时关闭 UI 展示（悬浮按钮 + 自动弹窗），排查逻辑保留，后续需要时改回 true 即可。
+ */
+const DEBUG_LOG_UI_ENABLED = false
+interface DebugLogItem {
+  time: string
+  level: 'log' | 'warn' | 'error'
+  text: string
+}
+const MAX_DEBUG_LOGS = 300
+const debugLogs = ref<DebugLogItem[]>([])
+const showDebugPanel = ref(false)
+
+function formatLogArg(arg: any): string {
+  if (typeof arg === 'string')
+    return arg
+  if (arg instanceof Error)
+    return arg.message
+  try {
+    return JSON.stringify(arg)
+  } catch {
+    return String(arg)
+  }
+}
+
+function formatLogTime(): string {
+  const d = new Date()
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`
+}
+
+function pushDebugLog(level: DebugLogItem['level'], args: any[]) {
+  debugLogs.value.push({
+    time: formatLogTime(),
+    level,
+    text: args.map(formatLogArg).join(' '),
+  })
+  if (debugLogs.value.length > MAX_DEBUG_LOGS)
+    debugLogs.value.splice(0, debugLogs.value.length - MAX_DEBUG_LOGS)
+}
+
+function debugLog(...args: any[]) {
+  console.log(...args)
+  pushDebugLog('log', args)
+}
+
+function debugWarn(...args: any[]) {
+  console.warn(...args)
+  pushDebugLog('warn', args)
+}
+
+function debugError(...args: any[]) {
+  console.error(...args)
+  pushDebugLog('error', args)
+}
+
+function clearDebugLogs() {
+  debugLogs.value = []
+}
+
+function copyDebugLogs() {
+  const text = debugLogs.value.map(item => `[${item.time}][${item.level}] ${item.text}`).join('\n')
+  uni.setClipboardData({
+    data: text || '暂无日志',
+    success: () => uni.showToast({ title: '已复制', icon: 'none' }),
+  })
+}
+
+/** 保持引用，避免 APP 端音频实例被 GC 后静默不播 */
 let tipAudio: UniApp.InnerAudioContext | null = null
+// #ifdef APP-PLUS
+let tipPlayer: any = null
+// #endif
+let errorTipTimer: ReturnType<typeof setTimeout> | null = null
+let completedTipTimer: ReturnType<typeof setTimeout> | null = null
+
+function resolveAppAudioSrc(src: string): string {
+  // #ifdef APP-PLUS
+  const candidates = [
+    src,
+    `_www${src}`,
+    src.startsWith('/') ? src.slice(1) : src,
+  ]
+  for (const candidate of candidates) {
+    try {
+      const converted = plus.io.convertLocalFileSystemURL(candidate)
+      if (converted)
+        return converted
+    } catch {
+      // try next
+    }
+  }
+  // #endif
+  return src
+}
 
 function playTipAudio(src: string) {
-  tipAudio?.stop()
-  tipAudio?.destroy()
+  // #ifdef APP-PLUS
+  try {
+    tipPlayer?.stop()
+    tipPlayer = null
+  } catch {
+    tipPlayer = null
+  }
+  // APP 端优先用 plus.audio，本地 static 资源更稳
+  try {
+    const localSrc = resolveAppAudioSrc(src)
+    debugLog('[audio] plus.audio.createPlayer', src, '->', localSrc)
+    tipPlayer = plus.audio.createPlayer(localSrc)
+    tipPlayer.play(() => {}, (err) => {
+      debugError('[audio] plus.audio error', src, localSrc, JSON.stringify(err))
+      playInnerTipAudio(src)
+    })
+    return
+  } catch (err) {
+    debugError('[audio] plus.audio create failed', src, String(err))
+  }
+  // #endif
+  playInnerTipAudio(src)
+}
+
+function playInnerTipAudio(src: string) {
+  try {
+    tipAudio?.stop()
+    tipAudio?.destroy()
+  } catch {
+    // ignore
+  }
   tipAudio = uni.createInnerAudioContext()
   tipAudio.obeyMuteSwitch = false
-  // #ifdef APP-PLUS
-  tipAudio.src = plus.io.convertLocalFileSystemURL(src)
-  // #endif
-  // #ifndef APP-PLUS
-  tipAudio.src = src
-  // #endif
+  tipAudio.autoplay = true
+  tipAudio.src = resolveAppAudioSrc(src)
+  debugLog('[audio] InnerAudioContext.src', src, '->', tipAudio.src)
   tipAudio.onError((err) => {
-    console.error('[process-node] tip audio error', src, err)
+    debugError('[audio] tip audio error', src, tipAudio?.src, JSON.stringify(err))
+  })
+  tipAudio.onCanplay(() => {
+    tipAudio?.play()
   })
   tipAudio.onEnded(() => {
     tipAudio?.destroy()
     tipAudio = null
   })
+  // 部分机型不触发 onCanplay，兜底直接 play
   tipAudio.play()
 }
 
@@ -82,10 +206,11 @@ const locateCurtainId = ref<number | null>(null)
 const locateStructureId = ref<number | null>(null)
 const scanning = ref(false)
 
-const SCAN_END_DELAY = 100
+/** APP 扫码枪按键间隔可能 >100ms，过短会导致半截 UUID 被提交 */
+const SCAN_END_DELAY = 350
 const SCAN_MIN_LENGTH = 4
 /** 错误提示弹窗显示时长 */
-const ERROR_TIP_DURATION = 6000
+const ERROR_TIP_DURATION = 4000
 /** 同一码短时间内多通道触发（plus.key / input / timer）去重窗口 */
 const SCAN_DEDUPE_MS = 2000
 
@@ -141,10 +266,21 @@ const ANDROID_KEYCODE_CHAR: Record<number, string> = {
   189: '-',
 }
 
-const BARCODE_CODE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// codeId 实际为 UUID，后端可能返回带短横线（8-4-4-4-12）或去掉短横线的 32 位十六进制形式，两者都要兼容
+const BARCODE_CODE_ID_RE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})$/i
+const BARCODE_CODE_ID_FUZZY_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32}/i
 
 function isBarcodeCodeId(val: string): boolean {
   return BARCODE_CODE_ID_RE.test(val)
+}
+
+/** 从扫码枪可能夹带的前后噪声中提取 UUID */
+function extractBarcodeCodeId(raw: string): string {
+  const trimmed = raw.trim()
+  if (isBarcodeCodeId(trimmed))
+    return trimmed
+  const matched = trimmed.match(BARCODE_CODE_ID_FUZZY_RE)
+  return matched?.[0] ?? trimmed
 }
 
 function keyCodeToChar(keyCode: number): string {
@@ -267,7 +403,8 @@ async function fetchInstallProcess(processId: number): Promise<InstallProcess | 
     return loadingInstallProcessPromise
 
   loadingInstallProcessId = processId
-  loadingInstallProcessPromise = getInstallProcess(processId)
+  debugLog('[api] GET /zc/curtain-install-process/get 参数:', { id: processId })
+  loadingInstallProcessPromise = getInstallProcess(processId, { hideErrorToast: true })
     .then((process) => {
       installProcess.value = process
       return process
@@ -350,7 +487,12 @@ function showWrongNodeError(msg: string) {
   errorTipMsg.value = msg
   showWrongNodeTip.value = true
   playTipAudio('/static/audio/error_node.mp3')
-  setTimeout(() => { showWrongNodeTip.value = false }, ERROR_TIP_DURATION)
+  if (errorTipTimer)
+    clearTimeout(errorTipTimer)
+  errorTipTimer = setTimeout(() => {
+    showWrongNodeTip.value = false
+    errorTipTimer = null
+  }, ERROR_TIP_DURATION)
 }
 
 async function commitIfReady() {
@@ -444,17 +586,24 @@ async function handleCompleteProcess() {
   const { curtain, structure } = selectedStructure.value
   submitting.value = true
   try {
-    await createOrderProcessRecord({
+    const createReq = {
       orderId: orderDetail.value!.id,
       curtainId: curtain.id,
       structureId: structure.id,
       nodeId: selectedNodeId.value!,
       masterId: primaryOperator.value!.id,
       assistantId: secondaryOperator.value?.id,
-    })
+    }
+    debugLog('[api] POST /zc/order-process-record/create 参数:', createReq)
+    await createOrderProcessRecord(createReq, { hideErrorToast: true })
     playTipAudio('/static/audio/completed_node.mp3')
     showCompletedTip.value = true
-    setTimeout(() => { showCompletedTip.value = false }, 3000)
+    if (completedTipTimer)
+      clearTimeout(completedTipTimer)
+    completedTipTimer = setTimeout(() => {
+      showCompletedTip.value = false
+      completedTipTimer = null
+    }, 3000)
   } catch (e: any) {
     showWrongNodeError(e?.msg ?? e?.message ?? '提交失败，请重试')
   } finally {
@@ -476,7 +625,8 @@ async function handleOrderSearch() {
   searching.value = true
   orderDetail.value = null
   try {
-    orderDetail.value = await getSalesOrderDetail({ orderNo: no })
+    debugLog('[api] GET /zc/sales-order/detail 参数:', { orderNo: no })
+    orderDetail.value = await getSalesOrderDetail({ orderNo: no }, { hideErrorToast: true })
     if (orderDetail.value)
       setOrder(orderDetail.value)
   } catch {
@@ -488,7 +638,7 @@ async function handleOrderSearch() {
 }
 
 async function handleInputConfirm() {
-  const val = orderNo.value.trim()
+  const val = extractBarcodeCodeId(orderNo.value)
   if (!val)
     return
   // APP 端扫码枪常把内容注入到 input，需按条码 ID 解析而非订单号查询
@@ -498,6 +648,7 @@ async function handleInputConfirm() {
     await handleScanCode(val)
     return
   }
+  orderNo.value = val
   await handleOrderSearch()
 }
 
@@ -534,27 +685,33 @@ function resetScanBuffer() {
 }
 
 async function handleScanCode(code: string) {
-  const normalized = code.trim()
+  const normalized = extractBarcodeCodeId(code)
   if (!normalized)
     return
 
   if (shouldIgnoreDuplicateScan(normalized)) {
-    console.warn('[scanner] 忽略重复扫码:', normalized)
+    debugWarn('[scanner] 忽略重复扫码:', normalized)
     return
   }
 
   if (scanning.value) {
     if (normalized === currentScanCode || normalized === pendingScanCode) {
-      console.warn('[scanner] 忽略排队中的重复扫码:', normalized)
+      debugWarn('[scanner] 忽略排队中的重复扫码:', normalized)
       return
     }
     pendingScanCode = normalized
-    console.warn('[scanner] 当前请求进行中，已排队等待下一次处理:', normalized)
+    debugWarn('[scanner] 当前请求进行中，已排队等待下一次处理:', normalized)
     return
   }
 
-  console.log('[scanner] 收到扫码内容:', normalized)
+  debugLog('[scanner] 收到扫码内容:', normalized, code !== normalized ? `(raw: ${code})` : '')
+  // 每次扫码都自动打开日志面板，方便打包后在 APP 端直接看到本次处理过程
+  if (DEBUG_LOG_UI_ENABLED)
+    showDebugPanel.value = true
   currentScanCode = normalized
+  // 一开始就记入去重，避免失败后 plus.key / input 双通道反复弹「码无效」
+  lastScanCode = normalized
+  lastScanAt = Date.now()
   scanning.value = true
   // 每次扫码前清空当前订单信息，避免残留上次数据
   orderDetail.value = null
@@ -566,41 +723,58 @@ async function handleScanCode(code: string) {
   activeCurtainId.value = null
   try {
     await processBarcodeData(normalized)
-    lastScanCode = normalized
-    lastScanAt = Date.now()
-    console.log('[scanner] 扫码处理完成:', normalized)
+    debugLog('[scanner] 扫码处理完成:', normalized)
   } catch (error) {
-    console.error('[scanner] 扫码处理失败:', normalized, error)
-    throw error
+    debugError('[scanner] 扫码处理失败:', normalized, error)
   } finally {
     scanning.value = false
     currentScanCode = ''
     if (pendingScanCode) {
       const nextCode = pendingScanCode
       pendingScanCode = ''
-      console.log('[scanner] 开始处理排队扫码:', nextCode)
-      void handleScanCode(nextCode)
+      // 与刚处理完的码相同则丢弃，避免错误弹窗被反复重置导致「关不掉」
+      if (nextCode === lastScanCode && Date.now() - lastScanAt < SCAN_DEDUPE_MS) {
+        debugWarn('[scanner] 丢弃排队中的重复扫码:', nextCode)
+      } else {
+        debugLog('[scanner] 开始处理排队扫码:', nextCode)
+        void handleScanCode(nextCode)
+      }
     }
   }
 }
 
-function flushScanBuffer() {
+function flushScanBuffer(force = false) {
   const current = scanBuffer.trim()
+  // 无论是否触发扫码，缓冲区都必须清空，否则脏字符会一直累积导致后续永远拼不出合法 UUID
   resetScanBuffer()
-  if (current.length >= SCAN_MIN_LENGTH) {
-    if (isBarcodeCodeId(current))
-      orderNo.value = ''
-    void handleScanCode(current)
+
+  // 非强制（定时器超时）且不是完整 UUID：视为无关按键（如手动在输入框打字），静默丢弃，不当作扫码处理
+  // 非 UUID（如手动输入的订单号）交给 input @confirm 处理，避免误报「码无效」
+  if (!isBarcodeCodeId(current)) {
+    if (force && current)
+      debugWarn('[scanner] 忽略非条码内容:', current)
+    return
   }
+
+  orderNo.value = ''
+  void handleScanCode(current)
 }
 
 function appendScanChar(key: string, e?: any) {
-  if (!isPrintableScanChar(key, e ?? {}))
+  if (!isPrintableScanChar(key, e ?? {})) {
+    debugWarn('[scanner] 忽略不可打印字符:', JSON.stringify(key))
     return
+  }
   scanBuffer += key
   clearScanTimer()
+  debugLog('[scanner] 缓冲区:', scanBuffer)
+  // 已拼出完整 UUID 时尽快提交，不必再等间隔
+  if (isBarcodeCodeId(scanBuffer.trim())) {
+    flushScanBuffer(true)
+    return
+  }
   scanTimer = setTimeout(() => {
-    flushScanBuffer()
+    flushScanBuffer(false)
   }, SCAN_END_DELAY)
 }
 
@@ -613,7 +787,7 @@ function handleGlobalKeydown(e: any) {
     return
 
   if (key === 'Enter' || key === 'NumpadEnter') {
-    flushScanBuffer()
+    flushScanBuffer(true)
     return
   }
 
@@ -623,15 +797,18 @@ function handleGlobalKeydown(e: any) {
 /** APP 端扫码枪键盘事件（plus.key，document/window 在 WebView 中不可用） */
 function handlePlusKeyup(e: any) {
   const keyCode = Number(e?.keyCode)
+  debugLog('[scanner] plus.key keyup:', 'keyCode=', keyCode, 'key=', JSON.stringify(e?.key))
   if (keyCode === 66 || e?.key === 'Enter') {
-    flushScanBuffer()
+    flushScanBuffer(true)
     return
   }
   let key = typeof e?.key === 'string' && e.key.length === 1 ? e.key : ''
   if (!key && keyCode)
     key = keyCodeToChar(keyCode)
-  if (!key)
+  if (!key) {
+    debugWarn('[scanner] keyCode 无法映射为字符:', keyCode)
     return
+  }
   appendScanChar(key, e)
 }
 
@@ -680,7 +857,8 @@ function fetchBarcodeRegistry(codeId: string): Promise<BarcodeRegistryVO> {
     return loadingBarcodePromise
 
   loadingBarcodeCodeId = codeId
-  loadingBarcodePromise = getBarcodeRegistry(codeId).finally(() => {
+  debugLog('[api] GET /zc/barcode-registry/get 参数:', { codeId })
+  loadingBarcodePromise = getBarcodeRegistry(codeId, { hideErrorToast: true }).finally(() => {
     if (loadingBarcodeCodeId === codeId) {
       loadingBarcodeCodeId = null
       loadingBarcodePromise = null
@@ -690,11 +868,12 @@ function fetchBarcodeRegistry(codeId: string): Promise<BarcodeRegistryVO> {
 }
 
 async function processBarcodeData(codeId: string) {
+  debugLog('[scanner] 请求条码注册信息，codeId:', codeId)
   try {
     const data = await fetchBarcodeRegistry(codeId)
-    console.log('[scanner] 条码注册信息:', data)
+    debugLog('[scanner] 条码注册信息:', data)
     const content = JSON.parse(data.codeContent ?? '{}') as Record<string, any>
-    console.log('[scanner] 解析后的条码内容:', content)
+    debugLog('[scanner] 解析后的条码内容:', content)
     if (content.orderNo) {
       resetScanState()
       orderNo.value = content.orderNo
@@ -730,18 +909,30 @@ async function processBarcodeData(codeId: string) {
         setNode(selectedNodeId.value)
         await commitIfReady()
       }
-      console.log('[scanner] 本次扫码业务处理成功，订单号:', content.orderNo)
+      debugLog('[scanner] 本次扫码业务处理成功，订单号:', content.orderNo)
     } else {
-      console.warn('[scanner] 条码缺少 orderNo，无法处理:', content)
+      debugWarn('[scanner] 条码缺少 orderNo，无法处理:', content)
       showWrongNodeError('该码暂不支持解析')
     }
-  } catch (error) {
-    console.error('[scanner] 条码解析/请求失败:', codeId, error)
+  } catch (error: any) {
+    debugError(
+      '[scanner] 条码解析/请求失败:',
+      'codeId=',
+      codeId,
+      'msg=',
+      error?.msg ?? error?.message ?? error?.errMsg,
+      'statusCode=',
+      error?.statusCode,
+      'raw=',
+      error,
+    )
     showWrongNodeError('码ID无效或已过期')
   }
 }
 
 onLoad(async (query) => {
+  debugLog('[api] GET /zc/workshop-user/simple-list 参数: {}')
+  debugLog('[api] GET 我的工序列表 参数: {}')
   ;[userList.value, processNodeList.value] = await Promise.all([
     getWorkshopUserSimpleList(),
     getMyProcessNodes(),
@@ -782,6 +973,29 @@ onHide(() => {
 
 onUnload(() => {
   unbindScannerListener()
+  if (errorTipTimer) {
+    clearTimeout(errorTipTimer)
+    errorTipTimer = null
+  }
+  if (completedTipTimer) {
+    clearTimeout(completedTipTimer)
+    completedTipTimer = null
+  }
+  try {
+    tipAudio?.stop()
+    tipAudio?.destroy()
+  } catch {
+    // ignore
+  }
+  tipAudio = null
+  // #ifdef APP-PLUS
+  try {
+    tipPlayer?.stop()
+  } catch {
+    // ignore
+  }
+  tipPlayer = null
+  // #endif
 })
 
 function openPicker(target: 'primary' | 'secondary') {
@@ -1101,6 +1315,44 @@ function previewCurtainImage(url: string) {
       </view>
     </view>
   </view>
+
+  <!-- 调试日志悬浮按钮：排查扫码/音频问题用，打包后无法看控制台。问题已定位，暂时隐藏 -->
+  <view v-if="DEBUG_LOG_UI_ENABLED" class="debug-log-fab" @tap="showDebugPanel = true">
+    <text class="debug-log-fab-text">日志{{ debugLogs.length ? `(${debugLogs.length})` : '' }}</text>
+  </view>
+
+  <!-- 调试日志弹窗 -->
+  <wd-popup v-if="DEBUG_LOG_UI_ENABLED" v-model="showDebugPanel" position="bottom" custom-style="height: 70vh;">
+    <view class="debug-log-panel">
+      <view class="debug-log-header">
+        <text class="debug-log-title">调试日志</text>
+        <view class="debug-log-actions">
+          <view class="debug-log-btn" @tap="copyDebugLogs">
+            <text>复制</text>
+          </view>
+          <view class="debug-log-btn" @tap="clearDebugLogs">
+            <text>清空</text>
+          </view>
+          <view class="i-carbon-close text-[27px] text-#999" @tap="showDebugPanel = false" />
+        </view>
+      </view>
+      <scroll-view scroll-y class="debug-log-scroll" scroll-into-view="debug-log-bottom" scroll-with-animation>
+        <view v-if="!debugLogs.length" class="debug-log-empty">
+          <text>暂无日志，扫码后会自动记录在这里</text>
+        </view>
+        <view
+          v-for="(item, index) in debugLogs"
+          :key="index"
+          class="debug-log-item"
+          :class="`debug-log-item--${item.level}`"
+        >
+          <text class="debug-log-time">{{ item.time }}</text>
+          <text class="debug-log-text">{{ item.text }}</text>
+        </view>
+        <view id="debug-log-bottom" style="height: 1px;" />
+      </scroll-view>
+    </view>
+  </wd-popup>
 
   <!-- 已完成工序居中提示 -->
   <view v-if="showCompletedTip" class="completed-tip-overlay">
@@ -2026,6 +2278,108 @@ $font-scale: 1.35;
   justify-content: space-between;
   padding: 0 rpx(32) rpx(24);
   border-bottom: rpx(1) solid #f0f0f0;
+}
+
+.debug-log-fab {
+  position: fixed;
+  right: rpx(16);
+  bottom: rpx(16);
+  z-index: 9998;
+  padding: rpx(10) rpx(18);
+  background-color: rgba(0, 0, 0, 0.55);
+  border-radius: rpx(30);
+}
+
+.debug-log-fab-text {
+  font-size: fs(20);
+  color: #fff;
+}
+
+.debug-log-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: rpx(20) rpx(24);
+  box-sizing: border-box;
+}
+
+.debug-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: rpx(12);
+  border-bottom: 1px solid #eee;
+}
+
+.debug-log-title {
+  font-size: fs(26);
+  font-weight: 600;
+  color: #333;
+}
+
+.debug-log-actions {
+  display: flex;
+  align-items: center;
+  gap: rpx(16);
+}
+
+.debug-log-btn {
+  padding: rpx(8) rpx(18);
+  background-color: #f0f0f0;
+  border-radius: rpx(8);
+
+  text {
+    font-size: fs(20);
+    color: #666;
+  }
+}
+
+.debug-log-scroll {
+  flex: 1;
+  min-height: 0;
+  height: 0;
+  margin-top: rpx(12);
+}
+
+.debug-log-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: rpx(60) 0;
+
+  text {
+    font-size: fs(22);
+    color: #999;
+  }
+}
+
+.debug-log-item {
+  display: flex;
+  flex-direction: column;
+  gap: rpx(2);
+  padding: rpx(8) 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.debug-log-time {
+  font-size: fs(18);
+  color: #999;
+}
+
+.debug-log-text {
+  font-size: fs(20);
+  color: #333;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.debug-log-item--warn .debug-log-text {
+  color: #d46b08;
+}
+
+.debug-log-item--error .debug-log-text {
+  color: #cf1322;
+  font-weight: 600;
 }
 
 .completed-tip-overlay {
