@@ -208,13 +208,28 @@ function handleDingTalkLogin() {
 .remember-row {
   display: flex;
   align-items: center;
-  padding: 8rpx 0 16rpx;
+  padding: rpx(8) 0 rpx(16);
+
+  :deep(.wd-checkbox) {
+    font-size: fs(26);
+  }
+
+  :deep(.wd-checkbox__shape) {
+    width: rpx(32);
+    height: rpx(32);
+  }
+}
+
+:deep(.wd-button.is-primary) {
+  height: rpx(80);
+  font-size: fs(30);
+  border-radius: rpx(12);
 }
 
 // 第三方登录图标
 .icon-item {
-  width: 40rpx;
-  height: 40rpx;
+  width: rpx(40);
+  height: rpx(40);
   display: flex;
   align-items: center;
   justify-content: center;

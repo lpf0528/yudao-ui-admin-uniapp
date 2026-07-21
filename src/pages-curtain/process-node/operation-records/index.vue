@@ -89,11 +89,11 @@ function cancelRevoke() {
     </view>
 
     <view v-else-if="!records.length" class="empty-tip">
-      <view class="i-carbon-document text-80rpx text-#ccc" />
+      <view class="i-carbon-document text-[40px] text-#ccc" />
       <text class="tip-text">暂无操作记录</text>
     </view>
 
-    <scroll-view v-else scroll-x class="list-scroll">
+    <scroll-view v-else scroll-x scroll-y class="list-scroll">
       <view class="list">
         <!-- 表头 -->
         <view class="item item--header">
@@ -150,8 +150,8 @@ function cancelRevoke() {
               已撤销
             </view>
             <view v-else-if="item.status === 1 && item.nodeGroup !== 0" class="item-action" @tap="handleRevoke(item)">
-              <wd-loading v-if="revoking === item.id" size="54rpx" color="#f5222d" />
-              <view v-else class="i-carbon-undo text-54rpx text-[#f5222d]" />
+              <wd-loading v-if="revoking === item.id" size="27px" color="#f5222d" />
+              <view v-else class="i-carbon-undo text-[27px] text-[#f5222d]" />
               <text class="item-action-text">撤销</text>
             </view>
             <text v-else class="item-placeholder">-</text>
@@ -183,15 +183,31 @@ function cancelRevoke() {
 </template>
 
 <style lang="scss" scoped>
-$font-scale: 1.5;
+/**
+ * Android 平板横屏专用（不做手机适配）。
+ * 真机 rpx 会按逻辑宽度被撑大，本页全部固定 px。
+ *
+ * $scale：整体大小，偏大调小（0.42/0.45），偏小调大（0.55/0.58）
+ * $font-scale：字号相对间距的额外放大（车间远距离可读）
+ * 10 寸横屏约 1280×800 逻辑像素时，推荐起步 0.5 / 1.35
+ */
+$scale: 0.5;
+$font-scale: 1.35;
 
 @function fs($size) {
-  @return $size * $font-scale * 1rpx;
+  @return $size * $font-scale * $scale * 1px;
+}
+
+@function rpx($size) {
+  @return $size * $scale * 1px;
 }
 
 .page-body {
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
   background-color: #f5f5f5;
+  overflow: hidden;
 }
 
 .empty-tip {
@@ -199,22 +215,26 @@ $font-scale: 1.5;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-top: 200rpx;
+  flex: 1;
+  min-height: 0;
+  padding-top: rpx(120);
 }
 
 .tip-text {
-  margin-top: 16rpx;
+  margin-top: rpx(16);
   font-size: fs(36);
   color: #999;
 }
 
 .list-scroll {
+  flex: 1;
+  min-height: 0;
+  height: 0;
   width: 100%;
-  overflow: hidden;
 }
 
 .list {
-  padding: 16rpx 0;
+  padding: rpx(16) 0;
   width: max-content;
   min-width: 100%;
 }
@@ -223,16 +243,16 @@ $font-scale: 1.5;
   display: flex;
   align-items: center;
   background-color: #fff;
-  border-bottom: 1rpx solid #f0f0f0;
-  padding: fs(24) fs(20);
-  gap: fs(18);
+  border-bottom: rpx(1) solid #f0f0f0;
+  padding: rpx(24) rpx(20);
+  gap: rpx(18);
   min-width: 100%;
   width: max-content;
   box-sizing: border-box;
 
   &--header {
     background-color: #fafafa;
-    border-bottom: 2rpx solid #e8e8e8;
+    border-bottom: rpx(2) solid #e8e8e8;
   }
 
   &--revoked {
@@ -255,7 +275,7 @@ $font-scale: 1.5;
 }
 
 .item-order {
-  width: fs(450);
+  width: rpx(450);
   font-size: fs(36);
   font-weight: 600;
   color: #333;
@@ -267,7 +287,7 @@ $font-scale: 1.5;
 }
 
 .item-curtain {
-  width: fs(200);
+  width: rpx(200);
   font-size: fs(36);
   color: #666;
   line-height: 1.4;
@@ -278,7 +298,7 @@ $font-scale: 1.5;
 }
 
 .item-room {
-  width: fs(160);
+  width: rpx(160);
   font-size: fs(36);
   color: #666;
   line-height: 1.4;
@@ -289,7 +309,7 @@ $font-scale: 1.5;
 }
 
 .item-structure {
-  width: fs(180);
+  width: rpx(180);
   font-size: fs(36);
   color: #666;
   line-height: 1.4;
@@ -300,20 +320,20 @@ $font-scale: 1.5;
 }
 
 .item-node {
-  width: fs(330);
+  width: rpx(330);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 fs(10);
-  border-radius: 10rpx;
+  padding: 0 rpx(10);
+  border-radius: rpx(10);
   background-color: #e8f4f0;
   flex-shrink: 0;
-  min-height: fs(56);
+  min-height: rpx(56);
   box-sizing: border-box;
 }
 
 .item-node-header {
-  width: fs(330);
+  width: rpx(330);
   flex-shrink: 0;
   text-align: center;
 }
@@ -326,10 +346,10 @@ $font-scale: 1.5;
 }
 
 .item-operators {
-  width: fs(180);
+  width: rpx(180);
   display: flex;
   align-items: center;
-  gap: fs(6);
+  gap: rpx(6);
   flex-shrink: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -353,7 +373,7 @@ $font-scale: 1.5;
 }
 
 .item-note {
-  width: fs(220);
+  width: rpx(220);
   flex-grow: 1;
   font-size: fs(36);
   color: #999;
@@ -362,9 +382,9 @@ $font-scale: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
   background-color: #fafafa;
-  padding: fs(4) fs(10);
-  border-radius: 6rpx;
-  border: 1rpx solid #eee;
+  padding: rpx(4) rpx(10);
+  border-radius: rpx(6);
+  border: rpx(1) solid #eee;
   flex-shrink: 0;
   box-sizing: border-box;
 
@@ -378,7 +398,7 @@ $font-scale: 1.5;
 }
 
 .item-note-header {
-  width: fs(220);
+  width: rpx(220);
   flex-grow: 1;
   flex-shrink: 0;
   text-align: center;
@@ -388,14 +408,14 @@ $font-scale: 1.5;
   font-size: fs(36);
   color: #fff;
   background-color: #bbb;
-  padding: fs(2) fs(10);
-  border-radius: fs(16);
+  padding: rpx(2) rpx(10);
+  border-radius: rpx(16);
   flex-shrink: 0;
   white-space: nowrap;
 }
 
 .item-action-col {
-  width: fs(120);
+  width: rpx(120);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -406,8 +426,8 @@ $font-scale: 1.5;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: fs(4);
-  padding: fs(6) fs(8);
+  gap: rpx(4);
+  padding: rpx(6) rpx(8);
   flex-shrink: 0;
 }
 
@@ -437,13 +457,13 @@ $font-scale: 1.5;
 
 .custom-modal {
   width: 65%;
-  max-width: fs(720);
-  min-width: fs(480);
+  max-width: rpx(720);
+  min-width: rpx(480);
   background-color: #fff;
-  border-radius: fs(24);
-  padding: fs(48) fs(40);
+  border-radius: rpx(24);
+  padding: rpx(48) rpx(40);
   box-sizing: border-box;
-  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.15);
+  box-shadow: 0 rpx(4) rpx(24) rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -454,7 +474,7 @@ $font-scale: 1.5;
   font-weight: bold;
   color: #333;
   text-align: center;
-  margin-bottom: fs(32);
+  margin-bottom: rpx(32);
 }
 
 .custom-modal-content {
@@ -462,21 +482,21 @@ $font-scale: 1.5;
   color: #666;
   text-align: center;
   line-height: 1.5;
-  margin-bottom: fs(48);
+  margin-bottom: rpx(48);
 }
 
 .custom-modal-actions {
   width: 100%;
   display: flex;
-  gap: fs(24);
+  gap: rpx(24);
 }
 
 .modal-btn {
   flex: 1;
-  height: fs(88);
-  line-height: fs(88);
+  height: rpx(88);
+  line-height: rpx(88);
   font-size: fs(34);
-  border-radius: fs(12);
+  border-radius: rpx(12);
   text-align: center;
   margin: 0;
   padding: 0;

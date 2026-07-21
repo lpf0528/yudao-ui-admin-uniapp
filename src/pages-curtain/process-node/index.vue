@@ -45,6 +45,30 @@ const showCompletedTip = ref(false)
 const showWrongNodeTip = ref(false)
 const errorTipMsg = ref('')
 
+/** 保持引用，避免 APP 端 InnerAudioContext 被 GC 后静默不播 */
+let tipAudio: UniApp.InnerAudioContext | null = null
+
+function playTipAudio(src: string) {
+  tipAudio?.stop()
+  tipAudio?.destroy()
+  tipAudio = uni.createInnerAudioContext()
+  tipAudio.obeyMuteSwitch = false
+  // #ifdef APP-PLUS
+  tipAudio.src = plus.io.convertLocalFileSystemURL(src)
+  // #endif
+  // #ifndef APP-PLUS
+  tipAudio.src = src
+  // #endif
+  tipAudio.onError((err) => {
+    console.error('[process-node] tip audio error', src, err)
+  })
+  tipAudio.onEnded(() => {
+    tipAudio?.destroy()
+    tipAudio = null
+  })
+  tipAudio.play()
+}
+
 const userList = ref<WorkshopUserSimple[]>([])
 const processNodeList = ref<ProcessNodeSimple[]>([])
 const pickerTarget = ref<'primary' | 'secondary'>('primary')
@@ -325,9 +349,7 @@ async function ensureInstallProcessLoaded() {
 function showWrongNodeError(msg: string) {
   errorTipMsg.value = msg
   showWrongNodeTip.value = true
-  const audio = uni.createInnerAudioContext()
-  audio.src = '/static/audio/error_node.mp3'
-  audio.play()
+  playTipAudio('/static/audio/error_node.mp3')
   setTimeout(() => { showWrongNodeTip.value = false }, ERROR_TIP_DURATION)
 }
 
@@ -430,9 +452,7 @@ async function handleCompleteProcess() {
       masterId: primaryOperator.value!.id,
       assistantId: secondaryOperator.value?.id,
     })
-    const audio = uni.createInnerAudioContext()
-    audio.src = '/static/audio/completed_node.mp3'
-    audio.play()
+    playTipAudio('/static/audio/completed_node.mp3')
     showCompletedTip.value = true
     setTimeout(() => { showCompletedTip.value = false }, 3000)
   } catch (e: any) {
