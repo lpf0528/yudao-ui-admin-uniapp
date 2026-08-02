@@ -51,7 +51,11 @@ const errorTipMsg = ref('')
  * ------- 调试日志面板：打包后 APP 端无法看控制台，扫码相关日志额外落到此处用弹窗展示 -------
  * 问题已定位，暂时关闭 UI 展示（悬浮按钮 + 自动弹窗），排查逻辑保留，后续需要时改回 true 即可。
  */
-const DEBUG_LOG_UI_ENABLED = false
+const DEBUG_LOG_ENABLED_KEY = 'process-node-debug-log-enabled'
+const DEBUG_LOG_UI_ENABLED = ref(uni.getStorageSync(DEBUG_LOG_ENABLED_KEY) === true)
+watch(DEBUG_LOG_UI_ENABLED, (val) => {
+  uni.setStorageSync(DEBUG_LOG_ENABLED_KEY, val)
+})
 interface DebugLogItem {
   time: string
   level: 'log' | 'warn' | 'error'
@@ -744,7 +748,7 @@ async function handleScanCode(code: string) {
 
   debugLog('[scanner] 收到扫码内容:', normalized, code !== normalized ? `(raw: ${code})` : '')
   // 每次扫码都自动打开日志面板，方便打包后在 APP 端直接看到本次处理过程
-  if (DEBUG_LOG_UI_ENABLED)
+  if (DEBUG_LOG_UI_ENABLED.value)
     showDebugPanel.value = true
   currentScanCode = normalized
   // 一开始就记入去重，避免失败后 plus.key / input 双通道反复弹「码无效」
@@ -1486,6 +1490,15 @@ function previewCurtainImage(url: string) {
           <text>暂无工序配置</text>
         </view>
       </scroll-view>
+
+      <!-- 操作设置 -->
+      <view class="process-node-popup-settings">
+        <text class="process-node-popup-settings-title">操作设置</text>
+        <view class="process-node-popup-setting-item">
+          <text class="process-node-popup-setting-label">开启日志</text>
+          <wd-switch v-model="DEBUG_LOG_UI_ENABLED" size="20px" />
+        </view>
+      </view>
     </view>
   </wd-popup>
 
@@ -2425,6 +2438,31 @@ $font-scale: 1.35;
   font-size: fs(28);
   color: #bbb;
   background-color: #f5f5f5;
+}
+
+.process-node-popup-settings {
+  margin-top: rpx(20);
+  padding-top: rpx(20);
+  border-top: rpx(1) solid #f0f0f0;
+}
+
+.process-node-popup-settings-title {
+  display: block;
+  font-size: fs(24);
+  color: #999;
+  margin-bottom: rpx(16);
+}
+
+.process-node-popup-setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: rpx(4) 0;
+}
+
+.process-node-popup-setting-label {
+  font-size: fs(28);
+  color: #333;
 }
 
 .picker-header {
