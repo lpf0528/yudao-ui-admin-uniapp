@@ -58,3 +58,21 @@ export function getOrderProcessRecordList(params: OrderProcessRecordListParam) {
 export function revokeOrderProcessRecord(data: { id: number, note?: string }) {
   return http.put<boolean>('/zc/order-process-record/revoke', data)
 }
+
+export interface OrderProcessRecordMasterMaterialStat {
+  elementId: number
+  elementName: string
+  processCount: number
+  totalQuantity: number
+}
+
+export interface OrderProcessRecordMasterMaterialStatParam {
+  masterId: number
+  nodeId: number
+  beginCreateTime?: string
+  endCreateTime?: string
+}
+
+export function getOrderProcessRecordMasterMaterialStat(params: OrderProcessRecordMasterMaterialStatParam, options?: Partial<CustomRequestOptions>) {
+  return http.get<OrderProcessRecordMasterMaterialStat[]>('/zc/order-process-record/master-material-stat', params, undefined, options)
+}

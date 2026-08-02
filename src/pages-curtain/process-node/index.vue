@@ -2,13 +2,15 @@
 import type { BarcodeRegistryVO } from '@/api/curtain/barcode-registry/index'
 import type { InstallProcess } from '@/api/curtain/install-process/index'
 import type { SalesOrderDetail, SalesOrderMaterialDetail } from '@/api/curtain/order'
+import type { OrderProcessRecordMasterMaterialStat } from '@/api/curtain/order-process-record/index'
 import type { ProcessNodeSimple } from '@/api/curtain/process-node/index'
 import type { WorkshopUserSimple } from '@/api/curtain/workshop-user/index'
+import dayjs from 'dayjs'
 import { storeToRefs } from 'pinia'
 import { getBarcodeRegistry } from '@/api/curtain/barcode-registry/index'
 import { getInstallProcess } from '@/api/curtain/install-process/index'
 import { getSalesOrderDetail } from '@/api/curtain/order'
-import { createOrderProcessRecord } from '@/api/curtain/order-process-record/index'
+import { createOrderProcessRecord, getOrderProcessRecordMasterMaterialStat } from '@/api/curtain/order-process-record/index'
 import { getMyProcessNodes } from '@/api/curtain/process-node/index'
 import { getWorkshopUserSimpleList } from '@/api/curtain/workshop-user/index'
 import { useDictStore, useOperatorStore } from '@/store'
@@ -563,6 +565,41 @@ watch(() => primaryOperator.value?.id, async () => {
   await restoreProcessNodeSelection(true)
 })
 
+const workloadStatList = ref<OrderProcessRecordMasterMaterialStat[]>([])
+const workloadStatLoading = ref(false)
+
+async function fetchWorkloadStat() {
+  const masterId = primaryOperator.value?.id
+  const nodeId = selectedNodeId.value
+  if (!masterId || !nodeId) {
+    workloadStatList.value = []
+    return
+  }
+  workloadStatLoading.value = true
+  try {
+    const todayStart = dayjs().startOf('day').format('YYYY-MM-DD HH:mm:ss')
+    const todayEnd = dayjs().endOf('day').format('YYYY-MM-DD HH:mm:ss')
+    workloadStatList.value = await getOrderProcessRecordMasterMaterialStat({
+      masterId,
+      nodeId,
+      beginCreateTime: todayStart,
+      endCreateTime: todayEnd,
+    }, { hideErrorToast: true }) ?? []
+  } catch {
+    workloadStatList.value = []
+  } finally {
+    workloadStatLoading.value = false
+  }
+}
+
+const workloadTotalCount = computed(() =>
+  workloadStatList.value.reduce((sum, item) => sum + (item.processCount ?? 0), 0),
+)
+
+watch([() => primaryOperator.value?.id, selectedNodeId], () => {
+  fetchWorkloadStat()
+}, { immediate: true })
+
 function selectStructure(id: number) {
   if (locateStructureId.value)
     return
@@ -598,6 +635,7 @@ async function handleCompleteProcess() {
     await createOrderProcessRecord(createReq, { hideErrorToast: true })
     playTipAudio('/static/audio/completed_node.mp3')
     showCompletedTip.value = true
+    fetchWorkloadStat()
     if (completedTipTimer)
       clearTimeout(completedTipTimer)
     completedTipTimer = setTimeout(() => {
@@ -1252,6 +1290,34 @@ function previewCurtainImage(url: string) {
           </view>
         </view>
 
+        <!-- 今日工作量 -->
+        <view v-if="primaryOperator && selectedNodeId" class="delivery-panel">
+          <view class="workload-panel-header">
+            <text class="delivery-panel-title">今日工作量</text>
+            <text v-if="workloadStatList.length" class="workload-total">共 {{ workloadTotalCount }} 次</text>
+          </view>
+          <view v-if="workloadStatLoading" class="workload-placeholder">
+            <text class="workload-placeholder-text">统计中...</text>
+          </view>
+          <view v-else-if="workloadStatList.length" class="workload-table">
+            <view class="workload-row workload-row--header">
+              <text class="workload-col">类型</text>
+              <text class="workload-col">次数</text>
+              <text class="workload-col">用料</text>
+            </view>
+            <view class="workload-body">
+              <view v-for="item in workloadStatList" :key="item.elementId" class="workload-row">
+                <text class="workload-col workload-col-name">{{ item.elementName }}</text>
+                <text class="workload-col">{{ item.processCount }}</text>
+                <text class="workload-col">{{ item.totalQuantity }}</text>
+              </view>
+            </view>
+          </view>
+          <view v-else class="workload-placeholder">
+            <text class="workload-placeholder-text">今日暂无完成记录</text>
+          </view>
+        </view>
+
         <!-- 当前工序 -->
         <view v-if="primaryOperator" class="delivery-panel">
           <text class="delivery-panel-title">当前工序</text>
@@ -1572,6 +1638,95 @@ $font-scale: 1.35;
   font-size: fs(24);
   color: #bbb;
   text-align: center;
+}
+
+.workload-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: rpx(16);
+}
+
+.workload-panel-header .delivery-panel-title {
+  margin-bottom: 0;
+}
+
+.workload-total {
+  font-size: fs(24);
+  color: #018d71;
+  font-weight: 600;
+}
+
+.workload-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.workload-body {
+  display: flex;
+  flex-direction: column;
+  gap: rpx(8);
+  max-height: rpx(220);
+  overflow-y: auto;
+}
+
+.workload-row {
+  display: flex;
+  align-items: center;
+}
+
+.workload-row--header {
+  padding-bottom: rpx(10);
+  border-bottom: rpx(2) solid #eee;
+  margin-bottom: rpx(8);
+}
+
+.workload-row--header .workload-col {
+  font-size: fs(24);
+  color: #999;
+  font-weight: 500;
+}
+
+.workload-body .workload-row {
+  padding: rpx(10) 0;
+  background-color: #f6faf8;
+  border-radius: rpx(8);
+}
+
+.workload-col {
+  flex: 1;
+  font-size: fs(26);
+  color: #333;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workload-col-name {
+  color: #333;
+  font-weight: 500;
+}
+
+.workload-body .workload-col:nth-child(2) {
+  color: #018d71;
+  font-weight: 600;
+}
+
+.workload-body .workload-col:nth-child(3) {
+  color: #888;
+}
+
+.workload-placeholder {
+  padding: rpx(20) rpx(16);
+  background-color: #fafafa;
+  border-radius: rpx(12);
+  text-align: center;
+}
+
+.workload-placeholder-text {
+  font-size: fs(24);
+  color: #bbb;
 }
 
 .operator-panel {
